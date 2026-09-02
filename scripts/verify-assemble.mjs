@@ -98,6 +98,60 @@ if (result.executable) {
   console.log(`  ${ascending ? 'OK  ' : 'FAIL'} owners sort ascending`);
 }
 
+// 4. SIMULATE — the only thing assembly alone cannot prove.
+//
+// A blob can be correctly ordered, correctly sized and still be rejected by
+// checkSignatures: a wrong `v`, a stale signature, or a Safe GUARD that reverts
+// with InvalidSignatures() (specs/wild-stalls.md W1). eth_call runs the real
+// execTransaction against real state and costs nothing, so there is no reason
+// to ever broadcast a blob we have not simulated.
+//
+// `from` is the executor — an address that owns nothing on this Safe. If the
+// simulation succeeds from there, the permissionless claim is demonstrated
+// rather than asserted.
+if (result.executable && !flags['no-simulate']) {
+  const EXEC_ABI = [{
+    inputs: [
+      { name: 'to', type: 'address' }, { name: 'value', type: 'uint256' },
+      { name: 'data', type: 'bytes' }, { name: 'operation', type: 'uint8' },
+      { name: 'safeTxGas', type: 'uint256' }, { name: 'baseGas', type: 'uint256' },
+      { name: 'gasPrice', type: 'uint256' }, { name: 'gasToken', type: 'address' },
+      { name: 'refundReceiver', type: 'address' }, { name: 'signatures', type: 'bytes' },
+    ],
+    name: 'execTransaction', outputs: [{ name: 'success', type: 'bool' }],
+    stateMutability: 'payable', type: 'function',
+  }];
+  const executor = flags.executor && flags.executor !== true
+    ? flags.executor : '0x5E2e5Fd3aD7fDC9B94482930db8b5F45E439bab7';
+
+  console.log(`\n  simulating execTransaction from ${executor}`);
+  console.log(`  (eth_call — no gas, no broadcast, real state)`);
+  try {
+    const sim = await client.simulateContract({
+      address: safeAddress, abi: EXEC_ABI, functionName: 'execTransaction',
+      account: executor,
+      args: [
+        result.to, BigInt(result.value), result.data, result.operation,
+        BigInt(result.safeTxGas), BigInt(result.baseGas), BigInt(result.gasPrice),
+        result.gasToken, result.refundReceiver, result.signatures,
+      ],
+    });
+    // execTransaction returns bool success. FALSE means the outer call succeeded
+    // and the INNER call reverted — that is GS013 / inner-call-failed, a real
+    // broadcast with a real hash, not a validation failure.
+    console.log(`  ${sim.result === true ? 'OK   SIMULATION SUCCEEDS' : 'WARN outer ok, inner call would revert (inner-call-failed / GS013)'}`);
+    console.log(`  checkSignatures ACCEPTED the assembled blob.`);
+  } catch (e) {
+    const msg = String(e.shortMessage || e.message || e).split('\n')[0];
+    // GS02x are Safe's own signature errors; anything else is a guard or the payload.
+    const code = msg.match(/GS\d{3}/)?.[0];
+    console.log(`  FAIL simulation reverted: ${msg.slice(0, 140)}`);
+    if (code) console.log(`       Safe error ${code}${code === 'GS026' ? ' — invalid owner-provided signature' : ''}`);
+    if (/InvalidSignatures/.test(msg)) console.log(`       a Safe GUARD rejected it (wild-stalls.md W1) — not a blob defect`);
+    process.exitCode = 1;
+  }
+}
+
 if (flags['write-fixture']) {
   const dir = join(ROOT, 'test', 'fixtures');
   mkdirSync(dir, { recursive: true });
