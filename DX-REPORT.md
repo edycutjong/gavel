@@ -78,20 +78,72 @@ misconfiguration and is the kind of documentation the above is missing.
 
 ---
 
-## DX-3 · Nothing distinguishes a managed Turnkey wallet from an imported key at a glance
+## DX-3 · `isManaged` on a web3 integration does not say what it manages
 
-**Severity:** low — but it silently invalidates a security claim.
+**Severity:** low — a documentation/naming issue, not a bug.
+**Date:** 2026-09-02 · **Status: needs confirmation before filing.**
+
+`list_integrations` returns `isManaged: false` for our org's web3 integration, while the
+platform metadata elsewhere describes wallets as `"provider": "Turnkey", "features":
+["secure-enclave", "non-custodial", "hosted"]`. Read together, `isManaged: false` invites
+the conclusion "this is an imported key, not a Turnkey wallet" — which appears to be the
+wrong reading, since the org Turnkey wallet is provisioned automatically and is the only
+wallet an organization has.
+
+The consequence of the misreading is not trivial: a project that concludes it is *not* on
+Turnkey will either avoid claiming enclave custody it actually has, or claim it and be
+wrong. Neither is good.
+
+**Suggested fix:** document what `isManaged` refers to on the integration object, or rename
+it to something scoped to the record rather than the custody model.
+
+**Before filing:** confirm against Settings > Organization > Wallets that the address in
+the integration is the provisioned org Turnkey wallet. If it is, this is the finding as
+written. If it is not, the finding is different and stronger.
+
+---
+
+## DX-4 · No supported way to opt out of gas sponsorship when on-chain provenance is the point
+
+**Severity:** high — it silently changes what a transaction proves.
 **Date:** 2026-09-02
 
-`list_integrations` returns `isManaged: false` for a web3 integration created by importing
-a key, and the platform metadata elsewhere describes wallets as
-`"provider": "Turnkey", "features": ["secure-enclave", "non-custodial", "hosted"]`. Both
-are accurate; together they are easy to conflate. A project that states "signed inside a
-Turnkey secure enclave" while pointing at an imported key has made a false security claim
-without doing anything obviously wrong.
+Per `wallet-management/gas`, a write is sponsored when four conditions all hold: supported
+network, direct wallet sender (no Safe), public mempool, and gas credits available. On Base
+with a plain wallet sender, all four are the default, so **sponsorship is the default path**.
 
-**Suggested fix:** surface the distinction in the integration label or add an explicit
-`custodyModel: "turnkey-managed" | "imported-key"` field.
+Per `wallet-management/onchain-appearance`, a sponsored write is submitted by a relayer:
+`From` is an address the user does not recognise, `To` is a contract they do not recognise,
+and the user's own action becomes an internal call. The docs are admirably explicit about
+the consequence:
+
+> *"Do not verify by opening your wallet address and looking through its transaction list. A
+> sponsored transaction was not sent by your wallet, so it does not appear there."*
+
+That is the correct behaviour for the common case, and the documentation for it is genuinely
+good. But there is a class of application where **the identity of the top-level sender is
+the product**, not an implementation detail:
+
+- an executor whose entire claim is *"this address, which owns nothing, submitted this call"*
+- any keeper or relayer whose users audit it by watching one address
+- anything whose evidence is "open this address on the explorer and count"
+
+For those, the sponsored shape does not merely look unfamiliar — it erases the artifact. And
+there appears to be **no per-workflow, per-node, or per-organization documented way to say
+"send this one directly, I will pay the gas."** The only levers are indirect: exhaust the
+gas-credit cap (uncontrolled, and it flips mid-run), or route through a Safe as Sender
+(which changes `msg.sender`, a different and worse side effect).
+
+**Suggested fix:** an explicit `sponsorship: "auto" | "never"` field on write actions, or an
+organization-level toggle. `"never"` is a one-line policy check against the existing
+four-condition test, and it makes on-chain provenance a supported use case rather than
+something achieved by accident.
+
+**Why it matters commercially:** sponsorship is metered against a monthly credit cap, so
+users who opt out are cheaper to serve, not more expensive.
+
+**Current status:** unresolved. gavel needs the direct shape and does not have a supported
+way to guarantee it.
 
 ---
 
