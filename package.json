@@ -1,0 +1,14 @@
+{
+  "name": "gavel",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Executes threshold-met Safe transactions from a wallet that owns nothing.",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node --test"
+  },
+  "license": "MIT"
+}

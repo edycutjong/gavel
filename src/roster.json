@@ -1,0 +1,5 @@
+{
+  "$comment": "The opt-in list. Invariant I3: a Safe absent from this file is never executed against, and assemble.mjs re-checks it independently of roster-1 because the public Marketplace listing is a caller-open door. Populated by scripts/seed.mjs once the mainnet cast is deployed.",
+  "chainId": 8453,
+  "safes": []
+}
