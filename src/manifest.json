@@ -1,0 +1,83 @@
+{
+  "$comment": "The seed cast. One source of truth for both chains — seed.mjs selects by chainId. Every payload byte here is a literal (invariant G2): operation, safeTxGas, baseGas, gasPrice, gasToken and refundReceiver are never defaults.",
+
+  "chains": {
+    "8453": {
+      "name": "Base",
+      "role": "judged",
+      "rpc": "https://mainnet.base.org",
+      "explorer": "https://basescan.org",
+      "txService": "https://api.safe.global/tx-service/base/api/v2",
+      "usdc": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+      "usdcVerified": "symbol=USDC name='USD Coin' decimals=6, read on-chain 2026-09-02",
+      "fundKey": "fundUsdc",
+      "receiptsEligible": true
+    },
+    "11155111": {
+      "name": "Ethereum Sepolia",
+      "role": "rehearsal",
+      "rpc": "https://ethereum-sepolia-rpc.publicnode.com",
+      "explorer": "https://sepolia.etherscan.io",
+      "txService": "https://api.safe.global/tx-service/sep/api/v2",
+      "usdc": "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
+      "usdcVerified": "symbol=USDC decimals=6, read on-chain 2026-09-02",
+      "fundKey": "fundUsdcRehearsal",
+      "receiptsEligible": false,
+      "$note": "Substituted for Base Sepolia — see specs/cast.md. receiptsEligible:false is load-bearing: NO row from this chain may ever enter receipts.json or EVIDENCE.md (seed-data.md §8.1)."
+    }
+  },
+
+  "$amounts": "fundUsdc is the mainnet manifest (282.00 total, seed-data.md §3). fundUsdcRehearsal is scaled to fit the 20 USDC the Sepolia faucet provides (17.00 total, 3.00 spare). Ratios and every branch are preserved; only magnitude changes.",
+
+  "safes": [
+    { "id": "HERO_A",       "owners": ["O1","O2","O3"],           "threshold": 2, "saltNonce": "1001",
+      "roster": true,  "fundUsdc": "250.000000", "fundUsdcRehearsal": "10.000000",
+      "purpose": "The demo video. Aged payout at nonce 0, drained by the unattended sweep." },
+
+    { "id": "HERO_B",       "owners": ["O1","O2","O3"],           "threshold": 2, "saltNonce": "1002",
+      "roster": false, "fundUsdc": "0.000000",   "fundUsdcRehearsal": "0.000000",
+      "purpose": "The finalist call. Never touched until then; funded late from HERO_A proceeds.",
+      "assertNotOnRoster": true },
+
+    { "id": "VOL_1",        "owners": ["O1","O2"],                "threshold": 1, "saltNonce": "2001",
+      "roster": true,  "fundUsdc": "5.000000",   "fundUsdcRehearsal": "1.000000",
+      "purpose": "Volume + threshold axis. Shortest blob (65 B)." },
+
+    { "id": "VOL_2",        "owners": ["O1","O2","O3"],           "threshold": 2, "saltNonce": "2002",
+      "roster": true,  "fundUsdc": "5.000000",   "fundUsdcRehearsal": "1.000000",
+      "purpose": "Volume + the PI-1 control Safe (owner- vs non-owner-executed, identical payload)." },
+
+    { "id": "VOL_3",        "owners": ["O1","O2","O3","O4","O5"], "threshold": 2, "saltNonce": "2003",
+      "roster": true,  "fundUsdc": "5.000000",   "fundUsdcRehearsal": "1.000000",
+      "purpose": "Volume + the 2-of-5 leg of PI-2 (owner-set invariance vs VOL_2)." },
+
+    { "id": "VOL_4",        "owners": ["O1","O2","O3","O4","O5"], "threshold": 3, "saltNonce": "2004",
+      "roster": true,  "fundUsdc": "5.000000",   "fundUsdcRehearsal": "1.000000",
+      "purpose": "Volume + longest blob (195 B) and the ordering stress for PI-3." },
+
+    { "id": "BENCH_RACE",   "owners": ["O1","O2","O3"],           "threshold": 2, "saltNonce": "3001",
+      "roster": false, "fundUsdc": "2.000000",   "fundUsdcRehearsal": "1.000000",
+      "purpose": "The deliberate GS026 (M3). Fresh payout per race take." },
+
+    { "id": "BENCH_REFUND", "owners": ["O1","O2","O3"],           "threshold": 2, "saltNonce": "3002",
+      "roster": false, "fundUsdc": "0.000000",   "fundUsdcRehearsal": "0.000000",
+      "purpose": "Permanent hostile refund payload -> refund-requested. Never executes, so needs no balance." },
+
+    { "id": "BENCH_GATE",   "owners": ["O1","O2","O3"],           "threshold": 3, "saltNonce": "3003",
+      "roster": false, "fundUsdc": "0.000000",   "fundUsdcRehearsal": "0.000000",
+      "purpose": "Permanent payout signed by O1 only, two short -> below-threshold. A gate that cannot open by accident." },
+
+    { "id": "BENCH_GOV",    "owners": ["O1","O2","O3"],           "threshold": 2, "saltNonce": "3004",
+      "roster": false, "fundUsdc": "5.000000",   "fundUsdcRehearsal": "1.000000",
+      "purpose": "threshold-drift / owner-removed, performed live on the finalist call." },
+
+    { "id": "BENCH_GS013",  "owners": ["O1","O2","O3"],           "threshold": 2, "saltNonce": "3005",
+      "roster": false, "fundUsdc": "0.000000",   "fundUsdcRehearsal": "0.000000",
+      "purpose": "Permanent 1.00 payout against a DELIBERATELY EMPTY Safe -> inner-call-failed (GS013). Broadcasts, reverts, real hash.",
+      "mustStayEmpty": true },
+
+    { "id": "BENCH_ROTATE", "owners": ["O1","O2","O3"],           "threshold": 2, "saltNonce": "3006",
+      "roster": false, "fundUsdc": "5.000000",   "fundUsdcRehearsal": "1.000000",
+      "purpose": "Workbench: not-next-nonce, delegatecall-refused, nonce-conflict, plus the day-1 Direct Execution tx." }
+  ]
+}
