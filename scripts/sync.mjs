@@ -74,9 +74,20 @@ const VIEW_ABI = (name, outType) => JSON.stringify([
  */
 function buildCodeBody() {
   const src = readFileSync(join(ROOT, 'src', 'assemble.mjs'), 'utf8');
-  if (/^\s*import\s/m.test(src)) {
-    console.error('assemble.mjs contains an import — it must stay dependency-free (invariant I10).');
-    process.exit(1);
+  // I10 must fail LOUDLY here, never silently in the sandbox. Static imports,
+  // dynamic import(), and the eval-family are all rejected.
+  for (const [re, what] of [
+    [/^\s*import\s/m, 'a static import'],
+    [/\bimport\s*\(/, 'a dynamic import()'],
+    [/\beval\s*\(/, 'eval()'],
+    [/\bnew\s+Function\s*\(/, 'new Function()'],
+    [/\bMath\.random\s*\(/, 'Math.random()'],
+    [/\bDate\.now\s*\(/, 'Date.now()'],
+  ]) {
+    if (re.test(src)) {
+      console.error(`assemble.mjs contains ${what} — it must stay pure and dependency-free (I10).`);
+      process.exit(1);
+    }
   }
   const stripped = src
     .replace(/^export default assemble;\s*$/m, '')
@@ -94,11 +105,24 @@ function buildCodeBody() {
 // caller-open door and the first check is bypassable through it.
 const ROSTER = ${roster};
 
+// The webhook value is substituted as a JSON VALUE, never inside a string
+// literal. Splicing it between quotes let a caller close the string and append
+// their own assemble() declaration, which hoists over the real one and
+// bypasses every guard at once. gate-addr below rejects non-addresses before
+// this node runs; this line makes the splice non-syntactic regardless.
+const __safeAddress = {{@trigger-1:Webhook.safeAddress}};
 const __hydrated = {{@hydrate-1:Hydrate Signatures.data}};
 const __transactions = (__hydrated && __hydrated.results) ? __hydrated.results : [];
 
+// Belt and braces: assemble refuses a malformed address anyway, but a value that
+// is not a string should never reach it from here.
+if (typeof __safeAddress !== "string") {
+  return { executable: false, reason: "malformed-payload",
+           detail: "safeAddress was not a string", signatures: "" };
+}
+
 return assemble({
-  safeAddress: "{{@trigger-1:Webhook.safeAddress}}",
+  safeAddress: __safeAddress,
   roster: ROSTER,
   queue: { transactions: __transactions, count: __transactions.length },
   onchainNonce: ${chainId === '8453'
@@ -160,17 +184,26 @@ if (!web3Integration || web3Integration === true) {
 const nodes = [
   node('trigger-1', 'Webhook', 'trigger', { triggerType: 'Webhook' }, 0, 0),
 
+  // The first thing that touches caller input. A webhook (or the public
+  // Marketplace listing) can send anything; nothing downstream should have to
+  // assume otherwise. Rejecting non-addresses here means the injection vector in
+  // the Code node is closed at the boundary as well as at the splice.
+  node('gate-addr', 'Valid Address', 'action', {
+    actionType: 'Condition',
+    condition: '{{@trigger-1:Webhook.safeAddress}} matchesRegex ^0x[0-9a-fA-F]{40}$',
+  }, 250, 0),
+
   node('queue-1', 'Safe Queue', 'action', {
     actionType: 'safe/get-pending-transactions', network: chainId,
     safeAddress: SAFE_ADDR, integrationId: safeIntegration,
-  }, 250, 0),
+  }, 500, 0),
 
   // Δ1 (RATIFIED, complexity.md §4a). Without it every idle sweep runs three
   // on-chain reads and the Code node, then posts "skipped: no work" — ~720 idle
   // messages a day across a 5-Safe roster, and the live feed stops being readable.
   node('gate-0', 'Has Work', 'action', {
     actionType: 'Condition', condition: '{{@queue-1:Safe Queue.count}} > 0',
-  }, 500, 0),
+  }, 750, 0),
 
   ...readNodes(),
 
@@ -179,8 +212,17 @@ const nodes = [
   // arguments, two of which are the hostile-refund vector (DX-1). Verified live.
   node('hydrate-1', 'Hydrate Signatures', 'action', {
     actionType: 'HTTP Request', httpMethod: 'GET',
-    endpoint: `${chain.txService}/safes/${SAFE_ADDR}/multisig-transactions/?executed=false&limit=20`,
-    timeout: 10, failOnError: false,
+    // ordering=nonce is load-bearing: the service defaults to -nonce (newest
+    // first), and the only executable entry is the LOWEST pending nonce. On a
+    // Safe with >20 pending proposals it would fall off page 1 and gavel would
+    // report not-next-nonce forever — fail-closed, but silently and wrongly.
+    endpoint: `${chain.txService}/safes/${SAFE_ADDR}/multisig-transactions/?executed=false&ordering=nonce&limit=20`,
+    httpHeaders: JSON.stringify({ Authorization: 'Bearer ${SAFE_TX_SERVICE_JWT}' }),
+    timeout: 10,
+    // failOnError:false keeps a transient outage from killing the run. The cost is
+    // that a 401 becomes an empty queue and a plausible-looking not-next-nonce, so
+    // the header above is what stops that being a silent permanent stall.
+    failOnError: false,
   }, 1500, 0),
 
   node('assemble-1', 'Assemble', 'action', {
@@ -204,7 +246,10 @@ const nodes = [
 ];
 
 const edges = [
-  { id: 'e-trigger-queue', source: 'trigger-1', target: 'queue-1' },
+  { id: 'e-trigger-gateaddr', source: 'trigger-1', target: 'gate-addr' },
+  // false branch is deliberately dangling: a malformed address ends the run
+  // silently rather than posting noise to the live feed.
+  { id: 'e-gateaddr-queue', source: 'gate-addr', target: 'queue-1', sourceHandle: 'true' },
   { id: 'e-queue-gate0', source: 'queue-1', target: 'gate-0' },
   { id: 'e-gate0-threshold', source: 'gate-0', target: 'threshold-1', sourceHandle: 'true' },
   { id: 'e-threshold-owners', source: 'threshold-1', target: 'owners-1' },

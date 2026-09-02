@@ -81,8 +81,13 @@ test('I3 · refuses a Safe that never opted in', () => {
 });
 
 test('I3 · roster matching is case-insensitive', () => {
-  const r = assemble(input({ roster: [SAFE.toUpperCase().replace('0X', '0x')] }));
-  assert.equal(r.executable, true);
+  // SAFE is all-1s, so upper/lowercasing it is a no-op and the old version of
+  // this test compared a string to itself. Use a mixed-case address so the
+  // assertion can actually fail if matching became case-sensitive.
+  const mixed = '0xAbCdEf0123456789aBcDeF0123456789AbCdEf01';
+  assert.notEqual(mixed, mixed.toLowerCase(), 'fixture must be mixed-case to be meaningful');
+  const r = assemble(input({ safeAddress: mixed, roster: [mixed.toLowerCase()] }));
+  assert.notEqual(r.reason, 'not-on-roster');
 });
 
 /* -------------------------------------------------- I2 + I11 · the nonce */
@@ -200,7 +205,12 @@ test('I1 · trusts the higher of the cached and live thresholds', () => {
 test('I10 · the code node performs no I/O', () => {
   const src = readFileSync(fileURLToPath(new URL('../src/assemble.mjs', import.meta.url)), 'utf8');
   const body = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
-  for (const forbidden of ['fetch(', 'await ', 'require(', 'XMLHttpRequest', 'process.env']) {
+  for (const forbidden of [
+    'fetch(', 'await ', 'require(', 'XMLHttpRequest', 'process.env',
+    // added after review: the original list would not have caught any of these,
+    // and each breaks either purity (I10) or determinism.
+    'eval(', 'new Function(', 'import(', 'Math.random(', 'Date.now(', 'new Date(',
+  ]) {
     assert.equal(body.includes(forbidden), false, `assemble.mjs must not contain ${forbidden}`);
   }
 });
