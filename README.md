@@ -303,7 +303,7 @@ refusing correctly is a success, not an error.
 | [`scripts/verify-assemble.mjs`](scripts/verify-assemble.mjs) | The pure function against a live queue; `--write-fixture` turns today's response into a regression test |
 | [`scripts/sync.mjs`](scripts/sync.mjs) | Emits the workflow JSON per chain (Safe plugin reads on 8453, `web3/read-contract` on testnets — see DX-6) |
 | [`scripts/audit.mjs`](scripts/audit.mjs) | Renders KeeperHub execution rows. Renders; never computes |
-| [`test/`](test/) | 50 tests: unit fixtures, the live-response regression file, and manifest/roster invariants |
+| [`test/`](test/) | 64 tests: unit fixtures, the live-response regression file, and manifest/roster invariants |
 | [`DX-REPORT.md`](DX-REPORT.md) | Seven reproducible KeeperHub findings, dated as they were hit |
 | [`workflows/`](workflows/) | Generated `gavel-drain` graph, 10 nodes |
 | [`docs/rehearsal-11155111.md`](docs/rehearsal-11155111.md) | Rehearsal log. Labelled NOT EVIDENCE |
