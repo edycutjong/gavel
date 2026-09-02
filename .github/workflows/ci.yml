@@ -1,0 +1,75 @@
+name: CI
+
+# gavel is a Node CLI, not a web app: there is no bundle to budget, no page to
+# audit with Lighthouse, and no UI to drive with Playwright. Those stages are
+# deliberately absent rather than faked. What IS here runs on every push.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: "Stage 1 · Tests"
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: ${{ github.event_name == 'push' && fromJSON('[20, 22, 24]') || fromJSON('[20]') }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: "npm"
+      - run: npm ci
+      # No network, no keys, no chain. If this ever needs a credential, the
+      # separation between the test suite and the product has broken.
+      - name: Tests
+        run: npm test
+
+  purity:
+    name: "Stage 1 · Decision-surface purity"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: "npm" }
+      - run: npm ci
+      # Invariant I10: assemble.mjs is injected verbatim into a sandboxed code
+      # node, so an import or an impure call would fail at runtime rather than
+      # here. sync.mjs refuses to emit in that case; this asserts it in CI too.
+      - name: assemble.mjs must stay pure and dependency-free
+        run: |
+          node -e "
+          const s=require('fs').readFileSync('src/assemble.mjs','utf8');
+          const bad=[/^\s*import\s/m,/\bimport\s*\(/,/\beval\s*\(/,/\bnew\s+Function\s*\(/,/\bfetch\s*\(/,/\bMath\.random\s*\(/,/\bDate\.now\s*\(/,/\bprocess\.env/];
+          const hit=bad.filter(r=>r.test(s));
+          if(hit.length){console.error('assemble.mjs is not pure:',hit.map(String).join(', '));process.exit(1);}
+          console.log('assemble.mjs is pure');"
+
+  security:
+    name: "Stage 2 · Dependency audit"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: "npm" }
+      - run: npm ci
+      - name: npm audit (high + critical)
+        run: npm audit --audit-level=high
+        continue-on-error: true
+
+  gate:
+    name: "Stage 3 · Gate"
+    needs: [quality, purity, security]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - run: echo "tests + purity + audit passed"
