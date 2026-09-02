@@ -216,6 +216,62 @@ the workaround entirely.
 
 ---
 
+## DX-7 · Plan gating is invisible until workflow-create, and it gates the two most composable actions
+
+**Severity:** high — it is discoverable only by hitting it, after the workflow is designed.
+**Date:** 2026-09-02
+
+`POST /api/workflows/create` rejected a completed workflow with:
+
+```json
+{"error":"This workflow uses features that require a paid plan.","code":"upgrade_required",
+ "violations":[
+   {"featureId":"action.http-request","featureName":"HTTP Request action","requiredPlan":"pro","nodeIds":["hydrate-1"]},
+   {"featureId":"action.code","featureName":"Code action","requiredPlan":"pro","nodeIds":["assemble-1"]}]}
+```
+
+The error itself is **excellent** — it names the feature, the plan, the action type and the exact
+node ids. Nothing about the response is wrong. The problem is everything before it.
+
+**Plan requirements are not discoverable in advance.** Checked today:
+
+| Source | Discloses `requiredPlan`? |
+|---|---|
+| `GET /api/mcp/schemas` | **no** — the string `requiredPlan` does not appear; `code/run-code` exposes `requiresCredentials` but nothing about plan |
+| `get_plugin` MCP tool | **no** |
+| docs.keeperhub.com (106 pages, crawled to link closure) | **no match** for "paid plan", "requiredPlan", "upgrade_required" or "pro plan" |
+
+So an agent authoring a workflow programmatically — which is precisely what the MCP server and the
+schema tips exist to support — cannot know a node is unusable until it submits a finished graph and
+is refused. The design work is already spent by then.
+
+**And the two gated actions are the two general-purpose ones.** `code/run-code` and `HTTP Request`
+are the escape hatches: the nodes you reach for when the 447 prebuilt actions don't cover your case.
+For gavel they are not conveniences —
+
+- `code/run-code` holds the **entire decision surface**: signature-blob assembly plus seven
+  pre-broadcast refusal guards. There is no combination of prebuilt actions that sorts confirmations
+  by ascending owner address and concatenates a signature blob.
+- `HTTP Request` is only needed **because of DX-1**: the Safe plugin's projection omits five of
+  `execTransaction`'s ten arguments, so the raw Transaction Service has to be read alongside it. A
+  gap in a plugin is being patched by an action behind a paywall.
+
+**Suggested fix, in order of preference:**
+
+1. Add `requiredPlan` to the action schema so `GET /api/mcp/schemas` and `get_plugin` expose it.
+   This is the whole fix for the discovery problem, and it is one field.
+2. Document the gated set on the plugins overview page.
+3. Consider whether a **hackathon or trial allowance** for `action.code` is warranted — an event
+   inviting integrations against a live project is, by construction, inviting the cases the prebuilt
+   actions do not cover.
+
+**Status for us:** unresolved. It does not block the mechanism — assembly can run outside the
+workflow and execute through the **Direct Execution API**, which is not plan-gated — but that moves
+the decision off-platform, which is a weaker answer to "execution *through* KeeperHub" and a worse
+demo. Asking the organiser in Discord before restructuring.
+
+---
+
 ## Notes for filing
 
 - Target repo: `github.com/KeeperHub/keeperhub`. Preflight the issue template's
