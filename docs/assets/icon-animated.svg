@@ -1,0 +1,129 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img"
+     aria-label="gavel mark animation — A threshold-met Safe transaction waits amber; the gavel falls, and it turns mint: executed.">
+<!-- STORYBOARD (dur 6s — the single master dur of this file)
+  0-10%   steady state: full mark on plate - raised mallet, quiet block, 2 amber dots + 1 hollow ring (2/3 signed). Poster-complete.
+  10-22%  trigger:      the LAST SIGNATURE lands - the third dot fills amber, pop ring.          data-story="beat-2"
+  22-45%  mechanism:    A threshold-met Safe transaction waits amber; the gavel falls, and it turns mint: executed.   data-story="beat-3"
+  45-80%  resolution:   mint persists on block + dots; a mint spark leaves the block; mallet returns to raised.       data-story="beat-4"
+  80-100% breathe + seam fade: glow breath; story overlays fade 96-100%; base (2/3, amber, raised) restored.
+  The gap NEVER narrows here. The mallet rotates about its own shaft end (386,321), so the pivot cap
+  is the lowest point and it is fixed: measured lowest mallet pixel y=347 at rest AND at the impact
+  frame, block top y=373 — a constant 26px of void. Contact is carried entirely by the ripple at
+  (214,372) and the mint flash, never by closing the gap. (readme-hero, which translates, closes to 3px.)
+-->
+  <title>gavel — the strike</title>
+  <defs>
+    <radialGradient id="ia-underglow" cx="50%" cy="42%" r="58%">
+      <stop offset="0%" stop-color="#FFB020" stop-opacity="0.20"/>
+      <stop offset="55%" stop-color="#FFB020" stop-opacity="0.06"/>
+      <stop offset="100%" stop-color="#FFB020" stop-opacity="0"/>
+    </radialGradient>
+    <!-- filterUnits default to objectBoundingBox, and the SVG object bounding box
+         EXCLUDES stroke width. The filtered element is a stroke-width:132 line whose
+         geometry bbox is only 130x130, so -40%/180% gave a region of x152..386,
+         y87..321 while the blurred stroke needs x90..448, y25..383 — the glow was
+         being cut off as a hard-edged rectangle. -120%/340% clears it. -->
+    <filter id="ia-breath" x="-120%" y="-120%" width="340%" height="340%">
+      <feGaussianBlur stdDeviation="16"/>
+    </filter>
+    <filter id="ia-spark" x="-120%" y="-120%" width="340%" height="340%">
+      <feGaussianBlur stdDeviation="4"/>
+    </filter>
+  </defs>
+  <style>
+    .ia-breath { animation: ia-breathe 6s ease-in-out infinite; }
+    @keyframes ia-breathe {
+      0%   { opacity: 0.30; }
+      45%  { opacity: 0.62; }
+      100% { opacity: 0.30; }
+    }
+    /* Reduced motion must also stop SMIL — `animation: none` only reaches CSS.
+       Author !important outranks the animation origin in the cascade, so these
+       three rules pin the file to its poster frame: raised mallet, quiet block,
+       2/3 amber dots, no strike. Measured in a real engine, not assumed. */
+    @media (prefers-reduced-motion: reduce) {
+      * { animation: none !important; }
+      [data-story] { opacity: 0 !important; }   /* every story overlay off */
+      .ia-swing    { transform: none !important; } /* animateTransform pinned to 0deg */
+    }
+  </style>
+
+  <!-- ============ base layer: fully visible at t=0 (poster rule) ============ -->
+  <rect x="16" y="16" width="480" height="480" rx="112" fill="#0B0E13" stroke="#313C4A" stroke-width="6"/>
+  <circle cx="256" cy="218" r="200" fill="url(#ia-underglow)"/>
+
+  <!-- strike block: the treasury. gavel does not own it. -->
+  <rect x="87" y="373" width="338" height="65" rx="32.5" fill="#8A97A8" opacity="0.55"/>
+
+  <!-- signature dots: 2 of 3 collected -->
+  <circle cx="184.5" cy="405.5" r="20.8" fill="#FFB020"/>
+  <circle cx="256"   cy="405.5" r="20.8" fill="#FFB020"/>
+  <circle cx="327.5" cy="405.5" r="20.8" fill="none" stroke="#8A97A8" stroke-width="5"/>
+
+  <!-- glow breath behind the head. opacity="0.46" is the mid-keyframe value, carried as a
+       presentation attribute so a still (reduced motion, or any rasteriser without CSS
+       animation) shows the same halo weight as the loop's average — not a blown-out 1.0. -->
+  <g class="ia-breath" opacity="0.46" filter="url(#ia-breath)">
+    <line x1="204" y1="269" x2="334" y2="139" stroke="#FFB020" stroke-width="132" stroke-linecap="round"/>
+  </g>
+
+  <!-- the mallet: swings about the shaft end (386,321) -->
+  <g class="ia-swing">
+    <animateTransform attributeName="transform" type="rotate" dur="6s" repeatCount="indefinite"
+      values="0 386 321;0 386 321;3 386 321;-8 386 321;-8 386 321;0 386 321;0 386 321"
+      keyTimes="0;0.24;0.31;0.38;0.5;0.88;1"
+      calcMode="spline"
+      keySplines="0.4 0 0.6 1;0.5 0 0.8 0.6;0.7 0 0.9 1;0.2 0.8 0.4 1;0.4 0 0.6 1;0.4 0 0.6 1"/>
+    <g transform="translate(48 48) scale(13)">
+      <line x1="17" y1="12" x2="26" y2="21" stroke="#FFD27A" stroke-width="4.2" stroke-linecap="round"/>
+      <line x1="13" y1="18" x2="23" y2="8" stroke="#B26A00" stroke-width="10" stroke-linecap="round"/>
+      <line x1="12" y1="17" x2="22" y2="7" stroke="#FFB020" stroke-width="10" stroke-linecap="round"/>
+    </g>
+  </g>
+
+  <!-- ============ story layer: every element below starts invisible ============ -->
+
+  <!-- beat 2: the last signature lands -->
+  <circle cx="327.5" cy="405.5" r="20.8" fill="#FFB020" opacity="0" data-story="beat-2">
+    <animate attributeName="opacity" dur="6s" repeatCount="indefinite"
+      values="0;0;1;1;0;0" keyTimes="0;0.10;0.18;0.90;0.955;1"/>
+  </circle>
+  <circle cx="327.5" cy="405.5" fill="none" stroke="#FFB020" stroke-width="4" opacity="0" data-story="beat-2">
+    <animate attributeName="r" dur="6s" repeatCount="indefinite"
+      values="21;21;44;44" keyTimes="0;0.10;0.24;1"/>
+    <animate attributeName="opacity" dur="6s" repeatCount="indefinite"
+      values="0;0;0.7;0;0" keyTimes="0;0.10;0.13;0.24;1"/>
+  </circle>
+
+  <!-- beat 3: impact ripple at the strike point -->
+  <circle cx="214" cy="372" fill="none" stroke="#FFD27A" stroke-width="5" opacity="0" data-story="beat-3">
+    <animate attributeName="r" dur="6s" repeatCount="indefinite"
+      values="12;12;110;110" keyTimes="0;0.38;0.54;1"/>
+    <animate attributeName="opacity" dur="6s" repeatCount="indefinite"
+      values="0;0;0.8;0;0" keyTimes="0;0.38;0.41;0.54;1"/>
+  </circle>
+
+  <!-- beat 3: the block turns mint - executed -->
+  <rect x="87" y="373" width="338" height="65" rx="32.5" fill="#00E5A0" opacity="0" data-story="beat-3">
+    <animate attributeName="opacity" dur="6s" repeatCount="indefinite"
+      values="0;0;0.85;0.85;0;0" keyTimes="0;0.38;0.43;0.90;0.955;1"/>
+  </rect>
+
+  <!-- beat 4: the dots turn deep-green against the mint block (token: success-ground) -->
+  <g fill="#062E22" stroke="#00E5A0" stroke-width="3" opacity="0" data-story="beat-4">
+    <animate attributeName="opacity" dur="6s" repeatCount="indefinite"
+      values="0;0;1;1;0;0" keyTimes="0;0.40;0.46;0.90;0.955;1"/>
+    <circle cx="184.5" cy="405.5" r="20.8"/>
+    <circle cx="256"   cy="405.5" r="20.8"/>
+    <circle cx="327.5" cy="405.5" r="20.8"/>
+  </g>
+
+  <!-- beat 4: value leaves - a mint spark exits the block -->
+  <circle r="10" fill="#00E5A0" filter="url(#ia-spark)" opacity="0" data-story="beat-4">
+    <animateMotion dur="6s" repeatCount="indefinite"
+      path="M 250,372 C 300,330 360,285 434,238"
+      keyPoints="0;0;1;1" keyTimes="0;0.44;0.62;1" calcMode="linear"/>
+    <animate attributeName="opacity" dur="6s" repeatCount="indefinite"
+      values="0;0;0.95;0.95;0;0" keyTimes="0;0.44;0.46;0.58;0.62;1"/>
+  </circle>
+</svg>
