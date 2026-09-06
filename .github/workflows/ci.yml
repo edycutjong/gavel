@@ -79,6 +79,13 @@ jobs:
       - name: Re-derive every published survey figure
         run: python3 survey/rederive.py
 
+      # bench.py is a reducer over committed rows, so CI can run it and get the
+      # same numbers as a laptop. This asserts it still reduces what audit.mjs
+      # writes -- a schema change upstream would otherwise surface as a stale
+      # figure in the README rather than a red build.
+      - name: Benchmark reducer runs against the committed receipts
+        run: python3 scripts/bench.py
+
   contracts:
     name: "Stage 1 · Contract tests + 100% coverage"
     runs-on: ubuntu-latest

@@ -210,7 +210,7 @@
 <body>
 <div class="wrap">
 
-  <span class="badge"><span class="dot"></span>ETHEREUM SEPOLIA · ONE REAL EXECUTION</span>
+  <span class="badge"><span class="dot"></span>ETHEREUM SEPOLIA · 24 EXECUTIONS</span>
 
   <div class="head">
     <img src="assets/icon.svg" alt="" width="54" height="54">
@@ -360,9 +360,15 @@
     1,299 Base mainnet Safes, and all 22 published figures re-derive offline from the raw responses
     committed beside them — <code>python3 survey/rederive.py</code>, no network, no credentials. CI runs it,
     so the prose cannot drift from the measurement.</p>
-    <p style="margin:0"><b style="color:var(--hi)">And it works.</b> A Safe was drained on-chain by an
-    address that owns none of it, and <code>isOwner(executor)</code> returns <em style="color:var(--green);font-style:normal">false</em>
-    for anyone who checks. Testnet, and labelled as such — but the mechanism is not a diagram.</p>
+    <p style="margin:0 0 10px"><b style="color:var(--hi)">And it works, repeatedly.</b> Safes drained
+    on-chain by an address that owns none of them, and <code>isOwner(executor)</code> returns
+    <em style="color:var(--green);font-style:normal">false</em> for anyone who checks. Testnet, and
+    labelled as such — but the mechanism is not a diagram.</p>
+    <p style="margin:0"><b style="color:var(--hi)">24 executions through KeeperHub, 24 successful.</b>
+    Median <b style="color:var(--hi)">14.3 s</b> from accepted to mined, p95 26.3 s, reduced from
+    KeeperHub's own rows by <code>python3 scripts/bench.py</code> — stdlib only, no network, CI-run.
+    Rehearsal figures: <code>audit.mjs</code> refuses to write a testnet row into evidence, and that
+    refusal applies to these numbers too.</p>
   </div>
 
   <footer>
