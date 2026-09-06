@@ -138,7 +138,10 @@
   .pct em{font-style:normal;color:var(--dead-lg)}
 
   /* the integration table — the thing this event is actually judged on */
-  .arch{width:100%;margin:0;border-radius:12px;display:block}
+  .arch{width:100%;height:auto;margin:0;border-radius:12px;display:block}
+  /* height:auto is load-bearing: the width/height attributes exist to reserve the
+     box and stop layout shift, but without this the height attribute applies
+     literally and the diagram renders 312x955 on a phone. */
   .surf{width:100%;border-collapse:collapse;margin-top:18px;font-size:14px}
   .surf td{padding:10px 0;border-top:1px solid var(--line);vertical-align:top}
   .surf tr:first-child td{border-top:0}
