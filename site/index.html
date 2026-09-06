@@ -142,6 +142,17 @@
   /* height:auto is load-bearing: the width/height attributes exist to reserve the
      box and stop layout shift, but without this the height attribute applies
      literally and the diagram renders 312x955 on a phone. */
+  /* Both marks are used referentially — to identify the surfaces this runs on,
+     at the point where the page explains what each one does. Neither company has
+     endorsed anything, which is why they sit here and not in a band under the
+     hero: a 'powered by' strip would claim a relationship that does not exist,
+     and the page says twice over that none of these surfaces are ours. */
+  .marks{display:flex;flex-wrap:wrap;gap:26px;margin:18px 0 0;padding-top:16px;
+    border-top:1px solid var(--line);font-size:13.5px;color:var(--mid)}
+  .marks span{display:inline-flex;align-items:center;gap:10px}
+  .marks img{width:26px;height:26px;border-radius:6px;flex:0 0 auto}
+  .marks b{color:var(--hi);font-weight:600}
+  @media(max-width:600px){.marks{gap:14px}}
   .surf{width:100%;border-collapse:collapse;margin-top:18px;font-size:14px}
   .surf td{padding:10px 0;border-top:1px solid var(--line);vertical-align:top}
   .surf tr:first-child td{border-top:0}
@@ -252,6 +263,12 @@
            decoding="async"
            alt="Four stages left to right. The Safe Transaction Service supplies the queue and the owner signatures. KeeperHub's Safe plugin performs four reads: the queue, nonce, threshold and owners. src/assemble.mjs decides purely and returns either ten execTransaction arguments or one of seven named refusals. KeeperHub Direct Execution simulates, then broadcasts from a wallet that owns none of the Safe. KeeperHub's own execution rows are the audit ledger.">
     </picture>
+    <p class="marks">
+      <span><img src="assets/mark-safe.png" width="26" height="26" alt="Safe logo" loading="lazy" decoding="async">
+        <b>Safe</b> — the queue and the owner signatures</span>
+      <span><img src="assets/mark-keeperhub.png" width="26" height="26" alt="KeeperHub logo" loading="lazy" decoding="async">
+        <b>KeeperHub</b> — the reads, the broadcast, the audit trail</span>
+    </p>
     <table class="surf">
       <tr><td>Safe plugin</td><td><b>Four reads, no writes.</b> The queue, plus <code>nonce()</code>,
         <code>getThreshold()</code> and <code>getOwners()</code>. All seven plugin actions are reads —
