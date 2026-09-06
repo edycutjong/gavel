@@ -75,7 +75,10 @@
 
   /* the split — the idea in one row */
   .split{display:grid;grid-template-columns:1fr auto 1fr;gap:0;align-items:stretch;margin:14px 0}
-  .split .act{background:var(--surface);border:1px solid var(--line);padding:20px 22px}
+  .split .act{background:var(--surface);border:1px solid var(--line);padding:20px 22px;
+    transition:background .22s ease,box-shadow .22s ease}
+  .split .done:hover{background:#131A17;box-shadow:inset 0 0 0 1px rgba(63,217,139,.28)}
+  .split .undone:hover{background:#1A1710;box-shadow:inset 0 0 0 1px rgba(255,176,32,.3)}
   .split .act:first-child{border-radius:14px 0 0 14px}
   .split .act:last-child{border-radius:0 14px 14px 0;border-left:0}
   .split .vs{display:grid;place-items:center;padding:0 14px;font-family:var(--mono);font-size:12px;
@@ -94,15 +97,31 @@
 
   /* the graveyard — 366 real transactions, 339 of them dead */
   .grid{display:flex;flex-wrap:wrap;gap:3px;margin:4px 0 18px}
-  .grid i{width:9px;height:9px;border-radius:2px;background:var(--dead);
-          opacity:0;animation:fade .5s ease forwards}
+  /* Squares fade in on a transition, not a keyframe: an animation's filled
+     value wins over later rules, and the legend dimming below must be able to
+     override it. Stagger is a per-square transition-delay set in the script. */
+  .grid i{width:12px;height:12px;border-radius:2px;background:var(--dead);
+          opacity:0;transition:opacity .45s ease,transform .12s ease}
+  .grid.in i{opacity:1}
   .grid i.live{background:var(--amber)}
   .grid i.nonce{background:#FFD37A}
-  .grid i.ok{background:var(--green);box-shadow:0 0 6px rgba(63,217,139,.8)}
-  @keyframes fade{to{opacity:1}}
-  .key{display:flex;flex-wrap:wrap;gap:16px;font-family:var(--mono);font-size:12.5px;color:var(--mid)}
-  .key span{display:inline-flex;align-items:center;gap:7px}
-  .key b{width:9px;height:9px;border-radius:2px;display:inline-block}
+  .grid i.ok{background:var(--green);box-shadow:0 0 10px rgba(63,217,139,.9)}
+  /* Point at one bucket — from the legend or from a square — and the other
+     three recede. The census does not change; only what you are looking at. */
+  .grid.in[data-focus="0"] i:not(.b0),
+  .grid.in[data-focus="1"] i:not(.b1),
+  .grid.in[data-focus="2"] i:not(.b2),
+  .grid.in[data-focus="3"] i:not(.b3){opacity:.12}
+  .grid i:hover{transform:scale(1.55);border-radius:1px}
+  .key{display:flex;flex-wrap:wrap;gap:10px;font-family:var(--mono);font-size:12.5px;color:var(--mid)}
+  .key button{display:inline-flex;align-items:center;gap:7px;font:inherit;color:inherit;
+    background:transparent;border:1px solid transparent;border-radius:8px;padding:5px 9px;
+    cursor:pointer;transition:background .18s ease,border-color .18s ease,color .18s ease}
+  .key button:hover,.key button.on{background:rgba(255,255,255,.045);
+    border-color:var(--line-strong);color:var(--hi)}
+  .key button:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+  .key button:active{transform:translateY(1px)}
+  .key b{width:9px;height:9px;border-radius:2px;display:inline-block;flex:0 0 auto}
   .funnel{font-family:var(--mono);font-size:14.5px;margin-top:6px}
   .funnel div{display:flex;gap:14px;padding:5px 0}
   .funnel b{min-width:56px;text-align:right;font-size:19px;color:var(--hi);font-variant-numeric:tabular-nums}
@@ -113,11 +132,17 @@
   .pct em{font-style:normal;color:var(--dead);filter:brightness(1.6)}
 
   ol{counter-reset:s;list-style:none;padding:0;margin:0}
-  ol li{counter-increment:s;position:relative;padding:16px 0 16px 52px;border-bottom:1px solid var(--line)}
+  ol li{counter-increment:s;position:relative;padding:16px 0 16px 52px;border-bottom:1px solid var(--line);
+    border-radius:10px;transition:background .2s ease}
   ol li:last-child{border-bottom:0}
+  /* Hover changes colour and inset shadow only — never padding, border-width or
+     font — so the step under the cursor cannot shift the five below it. */
+  ol li:hover{background:rgba(255,255,255,.022)}
+  ol li:hover::before{border-color:var(--amber);color:var(--bg);background:var(--amber)}
   ol li::before{content:counter(s);position:absolute;left:0;top:15px;width:32px;height:32px;
     border-radius:8px;background:var(--inset);border:1px solid var(--line-strong);
-    font-family:var(--mono);font-size:14px;color:var(--amber);display:grid;place-items:center}
+    font-family:var(--mono);font-size:14px;color:var(--amber);display:grid;place-items:center;
+    transition:background .2s ease,color .2s ease,border-color .2s ease}
   .expect{display:block;font-family:var(--mono);font-size:13.5px;color:var(--mid);margin-top:5px}
   .expect em{color:var(--green);font-style:normal}
   .warn{border-left:3px solid var(--amber);background:rgba(255,176,32,.05);padding:16px 20px;
@@ -126,15 +151,36 @@
   .deck{display:inline-flex;align-items:center;gap:10px;font-family:var(--mono);font-size:13.5px;
     letter-spacing:.05em;color:var(--bg);background:var(--amber);padding:11px 20px;border-radius:10px;
     border:0;font-weight:600;margin-top:18px}
-  .deck:hover{filter:brightness(1.08)}
+  .deck{transition:filter .18s ease,box-shadow .18s ease,transform .1s ease}
+  .deck:hover{filter:brightness(1.1);box-shadow:0 6px 22px rgba(255,176,32,.26)}
+  .deck:active{transform:translateY(1px);box-shadow:0 2px 8px rgba(255,176,32,.2)}
+  .cta{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:18px}
+  .cta .deck{margin-top:0}
+  /* Text, not a shields.io image: this page states that it makes no network
+     request, and an external badge would quietly make that false. The release
+     workflow rewrites the number here on every publish, so it cannot go stale. */
+  .ver{font-family:var(--mono);font-size:12.5px;letter-spacing:.06em;color:var(--mid);
+    border:1px solid var(--line-strong);border-bottom-color:var(--line-strong);
+    background:rgba(255,255,255,.03);padding:8px 13px;border-radius:99px;
+    transition:color .18s ease,border-color .18s ease,background .18s ease}
+  .ver:hover{color:var(--hi);border-color:var(--amber);background:rgba(255,176,32,.07)}
+  .ver:active{transform:translateY(1px)}
   footer{margin-top:64px;padding-top:22px;border-top:1px solid var(--line);
     font-family:var(--mono);font-size:12.5px;color:var(--low)}
-  @media(max-width:600px){.wrap{padding:36px 18px 64px}.grid i{width:8px;height:8px}}
+  /* Sections arrive as you reach them. Opacity and an 10px lift only: no
+     layout is reserved or reclaimed, so nothing below can jump. Anything the
+     observer never reaches stays visible — see the fallback in the script. */
+  .reveal{opacity:0;transform:translateY(10px);
+    transition:opacity .55s cubic-bezier(.22,.61,.36,1),transform .55s cubic-bezier(.22,.61,.36,1)}
+  .reveal.in{opacity:1;transform:none}
+  @media(max-width:600px){.wrap{padding:36px 18px 64px}.grid i{width:9px;height:9px}}
   @media(prefers-reduced-motion:reduce){
     html{scroll-behavior:auto}
     *,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;
       transition-duration:.001ms!important}
     .grid i{opacity:1}
+    .grid i:hover{transform:none}
+    .reveal{opacity:1;transform:none}
   }
 </style>
 </head>
@@ -155,10 +201,13 @@
     nobody's job. gavel is the party whose job it is.
   </p>
 
-  <a class="deck" href="deck.html">Open the 10-slide deck &rarr;</a>
+  <div class="cta">
+    <a class="deck" href="deck.html">Open the 10-slide deck &rarr;</a>
+    <a class="ver" href="https://github.com/edycutjong/gavel/releases/latest" data-version>v1.0.0</a>
+  </div>
 
   <h2>The two acts</h2>
-  <div class="split">
+  <div class="split reveal">
     <div class="act done">
       <h3>Signing</h3>
       <p>Off-chain, in the Safe Transaction Service. Free. The owners already did it — that is why the transaction is in the queue at all.</p>
@@ -173,18 +222,18 @@
   </div>
 
   <h2>The finding this is built on</h2>
-  <div class="card">
+  <div class="card reveal">
     <p class="pct"><em>92.6%</em> already dead</p>
     <p style="margin:10px 0 20px;color:var(--mid);font-size:15px">
       Every square is one queued Base transaction that passes the naive
       &ldquo;threshold met, not executed&rdquo; test.
     </p>
     <div class="grid" id="g" aria-hidden="true"></div>
-    <div class="key">
-      <span><b style="background:var(--dead);filter:brightness(1.5)"></b>339 dead — nonce consumed</span>
-      <span><b style="background:var(--amber)"></b>21 live, behind the nonce</span>
-      <span><b style="background:#FFD37A"></b>4 at nonce, do not simulate</span>
-      <span><b style="background:var(--green)"></b>2 simulate SUCCESS</span>
+    <div class="key" id="key">
+      <button type="button" data-b="0"><b style="background:var(--dead);filter:brightness(1.5)"></b>339 dead — nonce consumed</button>
+      <button type="button" data-b="1"><b style="background:var(--amber)"></b>21 live, behind the nonce</button>
+      <button type="button" data-b="2"><b style="background:#FFD37A"></b>4 at nonce, do not simulate</button>
+      <button type="button" data-b="3"><b style="background:var(--green)"></b>2 simulate SUCCESS</button>
     </div>
     <p style="margin:14px 0 0;font-size:13px;color:var(--low);font-family:var(--mono)">
       Squares partition the 366; the funnel below nests them. 21 + 4 + 2 = the 27 live,
@@ -206,7 +255,7 @@
   </p>
 
   <h2>Verify it yourself — five surfaces, none of them ours</h2>
-  <ol>
+  <ol class="reveal">
     <li>
       <a href="https://sepolia.etherscan.io/tx/0xf0b3b61144dc272ce39508056d600f28bbb7b92de1b2e30c4dc4da856ea4cc68">Open the transaction</a>
       <span class="expect">Status <em>Success</em> · 144,637 gas · block 11618878</span>
@@ -226,11 +275,11 @@
     </li>
     <li>
       <a href="https://github.com/edycutjong/gavel">Read the code</a> — <code>src/assemble.mjs</code> is the entire decision surface
-      <span class="expect"><code>npm test</code> · 64 tests, one of which runs against a committed real Safe Transaction Service response</span>
+      <span class="expect"><code>npm test</code> · 80 tests, 100% line and branch coverage on the decision surface, one of which runs against a committed real Safe Transaction Service response</span>
     </li>
   </ol>
 
-  <div class="warn">
+  <div class="warn reveal">
     <b>The sender will look wrong, and here is why before you wonder.</b><br>
     KeeperHub writes are gas-sponsored, so a relayer submits and the top-level <code>From</code> is an
     address you will not recognise. But <code>eth_getCode</code> on our executor returns
@@ -262,25 +311,78 @@
 
 </div>
 <script>
-  /* Draws 366 squares from the counts printed beside them. No data is fetched,
-     derived or stored; if this never runs, every number above is still on the
-     page in the funnel. Order is fixed, not random — a reload shows the same
-     picture, because it is a census and not an animation. */
+  /* Three behaviours, all progressive enhancement. If this file never runs the
+     page is still complete: every number is in the funnel and the prose, the
+     legend still reads, and nothing below depends on it. No data is fetched,
+     derived or stored. Square order is fixed, not random — a reload shows the
+     same picture, because it is a census and not an animation. */
   (function () {
-    var g = document.getElementById('g');
-    if (!g) return;
-    var BUCKETS = [[339, ''], [21, 'live'], [4, 'nonce'], [2, 'ok']];
     var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    var n = 0, frag = document.createDocumentFragment();
-    BUCKETS.forEach(function (b) {
-      for (var i = 0; i < b[0]; i++) {
-        var el = document.createElement('i');
-        if (b[1]) el.className = b[1];
-        el.style.animationDelay = reduce ? '0ms' : Math.min(n * 3, 1400) + 'ms';
-        frag.appendChild(el); n++;
+    var IO = window.IntersectionObserver;
+
+    /* 1. The census. 366 squares, drawn from the counts printed beside them. */
+    var g = document.getElementById('g');
+    if (g) {
+      var BUCKETS = [[339, ''], [21, 'live'], [4, 'nonce'], [2, 'ok']];
+      var n = 0, frag = document.createDocumentFragment();
+      BUCKETS.forEach(function (b, bi) {
+        for (var i = 0; i < b[0]; i++) {
+          var el = document.createElement('i');
+          el.className = (b[1] ? b[1] + ' ' : '') + 'b' + bi;
+          /* Stagger caps at 1.4s so the tail is never left waiting. */
+          el.style.transitionDelay = reduce ? '0ms' : Math.min(n * 3, 1400) + 'ms';
+          frag.appendChild(el); n++;
+        }
+      });
+      g.appendChild(frag);
+
+      /* Reveal when the grid is actually looked at, not when the page loads —
+         on load almost nobody has scrolled to it, so the fade played to an
+         empty room. Without IntersectionObserver, show it immediately. */
+      if (IO && !reduce) {
+        new IO(function (entries, obs) {
+          entries.forEach(function (e) {
+            if (e.isIntersecting) { e.target.classList.add('in'); obs.unobserve(e.target); }
+          });
+        }, { threshold: 0.15 }).observe(g);
+      } else {
+        g.classList.add('in');
       }
-    });
-    g.appendChild(frag);
+
+      /* 2. Point at one bucket and the other three recede — from either end.
+         Hovering a square lights its legend entry; hovering a legend entry
+         dims every square that is not in that bucket. The counts never move. */
+      var key = document.getElementById('key');
+      var btns = key ? [].slice.call(key.querySelectorAll('button')) : [];
+      function focus(b) {
+        if (b === null) { g.removeAttribute('data-focus'); }
+        else { g.setAttribute('data-focus', b); }
+        btns.forEach(function (x) { x.classList.toggle('on', b !== null && x.dataset.b === String(b)); });
+      }
+      btns.forEach(function (b) {
+        ['mouseenter', 'focus'].forEach(function (ev) { b.addEventListener(ev, function () { focus(b.dataset.b); }); });
+        ['mouseleave', 'blur'].forEach(function (ev) { b.addEventListener(ev, function () { focus(null); }); });
+        b.addEventListener('click', function () { focus(b.dataset.b); });
+      });
+      /* One delegated listener, not 366. */
+      g.addEventListener('mouseover', function (e) {
+        if (e.target.tagName !== 'I') return;
+        var m = /\bb([0-3])\b/.exec(e.target.className);
+        if (m) focus(m[1]);
+      });
+      g.addEventListener('mouseleave', function () { focus(null); });
+    }
+
+    /* 3. Sections arrive as you reach them. No observer, no support, or
+       reduced motion — they are simply already visible. */
+    var rev = [].slice.call(document.querySelectorAll('.reveal'));
+    if (!IO || reduce) { rev.forEach(function (el) { el.classList.add('in'); }); return; }
+    var ro = new IO(function (entries, obs) {
+      entries.forEach(function (e) {
+        if (e.isIntersecting) { e.target.classList.add('in'); obs.unobserve(e.target); }
+      });
+    }, { threshold: 0.08, rootMargin: '0px 0px -40px 0px' });
+    rev.forEach(function (el) { ro.observe(el); });
   })();
 </script>
 </body>

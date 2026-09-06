@@ -1,0 +1,121 @@
+name: Release
+
+# Automatic semantic versioning, without mandating a commit convention.
+#
+# This repo's commit subjects are prose ("survey/: the 92.6% stops asking to be
+# trusted"), and that is deliberate -- the history is judged. semantic-release
+# and release-please both require Conventional Commits and would either compute
+# nothing from this history or force the style to change. So the bump is derived
+# instead from an OPT-IN marker, defaulting to the safe choice:
+#
+#   [major] anywhere in the commit subject/body  -> X+1.0.0
+#   [minor]                                      -> x.Y+1.0
+#   neither (the default)                        -> x.y.Z+1
+#
+# workflow_dispatch takes an explicit bump for when a release is wanted on
+# demand. The first ever run publishes exactly v1.0.0 and applies no bump.
+#
+# No recursion guard is needed for the push this job makes: pushes authenticated
+# with GITHUB_TOKEN do not trigger workflow runs, by design.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: "Version bump"
+        default: patch
+        type: choice
+        options: [patch, minor, major]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # tags are the version source of truth
+
+      - name: Work out the next version
+        id: v
+        run: |
+          set -euo pipefail
+          git fetch --tags --force
+          LATEST=$(git tag -l 'v*' --sort=-v:refname | head -n1)
+
+          if [ -z "$LATEST" ]; then
+            NEXT="1.0.0"
+            echo "No tags yet -- this release is the baseline, v$NEXT."
+          else
+            CUR=${LATEST#v}
+            IFS=. read -r MA MI PA <<< "$CUR"
+
+            if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+              BUMP="${{ inputs.bump }}"
+            else
+              MSG=$(git log -1 --pretty=%B)
+              case "$MSG" in
+                *"[major]"*) BUMP=major ;;
+                *"[minor]"*) BUMP=minor ;;
+                *)           BUMP=patch ;;
+              esac
+            fi
+
+            case "$BUMP" in
+              major) MA=$((MA+1)); MI=0; PA=0 ;;
+              minor) MI=$((MI+1)); PA=0 ;;
+              patch) PA=$((PA+1)) ;;
+            esac
+            NEXT="$MA.$MI.$PA"
+            echo "$LATEST + $BUMP -> v$NEXT"
+          fi
+
+          echo "next=$NEXT" >> "$GITHUB_OUTPUT"
+          echo "prev=$LATEST" >> "$GITHUB_OUTPUT"
+
+      - name: Keep package.json and the two pages in step
+        run: |
+          set -euo pipefail
+          node -e '
+            const fs=require("fs"), V="${{ steps.v.outputs.next }}";
+            const p=JSON.parse(fs.readFileSync("package.json","utf8"));
+            p.version=V;
+            fs.writeFileSync("package.json", JSON.stringify(p,null,2)+"\n");
+            // The landing page and deck print the version as text -- they make no
+            // network request, so a shields.io badge is not an option there. Sync
+            // them here instead, so neither can advertise a stale release.
+            for (const f of ["site/index.html","site/deck.html"]) {
+              const s=fs.readFileSync(f,"utf8");
+              const out=s.replace(/(<a[^>]*data-version[^>]*>)v[0-9]+\.[0-9]+\.[0-9]+(<\/a>)/g, `$1v${V}$2`);
+              if (out!==s) fs.writeFileSync(f,out);
+            }
+          '
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if ! git diff --quiet; then
+            git add package.json site/index.html site/deck.html
+            git commit -m "chore(release): v${{ steps.v.outputs.next }}"
+            git push
+          fi
+
+      - name: Tag and publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          V="v${{ steps.v.outputs.next }}"
+          git tag -a "$V" -m "$V"
+          git push origin "$V"
+          if [ -n "${{ steps.v.outputs.prev }}" ]; then
+            gh release create "$V" --title "$V" --generate-notes --notes-start-tag "${{ steps.v.outputs.prev }}"
+          else
+            gh release create "$V" --title "$V" --generate-notes
+          fi

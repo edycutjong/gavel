@@ -46,6 +46,10 @@
   .inner{max-width:940px;width:100%;min-width:0}
   .n{position:absolute;top:26px;left:28px;font-family:var(--mono);font-size:12px;
      letter-spacing:.12em;color:var(--low)}
+  /* Text, not a shields.io image -- the deck ships as one offline file. The
+     release workflow rewrites this number on every publish. */
+  .ver{font-family:var(--mono);letter-spacing:.05em;border-bottom:1px solid rgba(255,176,32,.35)}
+  .ver:hover{border-bottom-color:var(--amber)}
   .kicker{font-family:var(--mono);font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;
      color:var(--amber);margin:0 0 18px}
   h1{font-size:clamp(40px,8vw,84px);line-height:.98;margin:0;color:var(--hi);letter-spacing:-.035em}
@@ -216,7 +220,7 @@ isOwner        <b>false</b>   ← owns nothing on the Safe it drained</div>
     <li><span class="m">Logs</span><span>Safe <code>ExecutionSuccess</code> + USDC <code>Transfer</code> — value moved</span></li>
     <li><span class="m">readContract</span><span><code>isOwner(executor)</code> returns <strong>false</strong></span></li>
     <li><span class="m">readContract</span><span><code>nonce</code> advanced past it — consumed, not merely proposed</span></li>
-    <li><span class="m">GitHub</span><span><code>npm test</code> — 64 tests, one against a committed real Transaction Service response</span></li>
+    <li><span class="m">GitHub</span><span><code>npm test</code> — 80 tests, 100% coverage on <code>assemble.mjs</code>, one against a committed real Transaction Service response</span></li>
   </ul>
   <p class="sub" style="margin-top:22px">We assert nothing on our own authority.</p>
 </div></section>
@@ -252,7 +256,8 @@ isOwner        <b>false</b>   ← owns nothing on the Safe it drained</div>
   <p style="margin-top:26px">
     <a class="end" href="https://github.com/edycutjong/gavel">Read the code &rarr;</a>
   </p>
-  <p class="sub" style="margin-top:34px">gavel · MIT · KeeperHub Agent Economy hackathon</p>
+  <p class="sub" style="margin-top:34px">gavel · MIT · KeeperHub Agent Economy hackathon ·
+    <a class="ver" href="https://github.com/edycutjong/gavel/releases/latest" data-version>v1.0.0</a></p>
 </div></section>
 
 </main>

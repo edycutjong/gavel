@@ -10,10 +10,12 @@ contracts/out/
 cache/
 
 # docs/assets/ is a generated copy — the canonical media lives in the kitchen and is
-# re-synced by sync-assets.sh, so nothing here is authored. Only the two files the
-# README actually renders are tracked; the rest (Devpost/YouTube upload media, the
-# static hero fallback, raster icons) are ~7 MB that no rendered surface reads.
+# re-synced by sync-assets.sh, so nothing here is authored. Only the four files
+# the README and its pages actually render are tracked; the rest (Devpost/YouTube upload media,
+# the static hero fallback, raster icons) are ~7 MB that no rendered surface reads.
 # The landing page does NOT read from here — site/assets/ carries its own copies.
 docs/assets/*
 !docs/assets/icon.svg
 !docs/assets/readme-hero-animated.svg
+!docs/assets/architecture.png
+!docs/assets/icon-animated.svg

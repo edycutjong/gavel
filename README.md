@@ -1,8 +1,8 @@
 <div align="center">
 
-  <img src="docs/assets/icon.svg" alt="gavel Icon" width="144">
+  <img src="docs/assets/icon-animated.svg" alt="gavel Icon" width="144">
 
-  <h1>gavel ⚖️</h1>
+  <h1>gavel 👨‍⚖️</h1>
 
   <p><em>Executes threshold-met Safe transactions from a wallet that owns nothing.</em></p>
 
@@ -26,6 +26,7 @@
   ![safe](https://img.shields.io/badge/Safe-Transaction%20Service-12ff80?style=flat)
   [![License](https://img.shields.io/badge/License-MIT-yellow?style=flat)](https://opensource.org/licenses/MIT)
   [![CI](https://github.com/edycutjong/gavel/actions/workflows/ci.yml/badge.svg)](https://github.com/edycutjong/gavel/actions/workflows/ci.yml)
+  [![Release](https://img.shields.io/github/v/release/edycutjong/gavel?sort=semver&style=flat)](https://github.com/edycutjong/gavel/releases/latest)
 
 </div>
 
@@ -87,12 +88,26 @@ The onboarding ask is one line: *give me your Safe address.* No private key, no 
 slot, no capital, no contract to deploy. Nothing gavel can do that the owners had not already signed
 for.
 
-The decision surface is one pure file — [`src/assemble.mjs`](src/assemble.mjs), ~320 lines, **zero
+The decision surface is one pure file — [`src/assemble.mjs`](src/assemble.mjs), 429 lines, **zero
 dependencies, zero I/O**: no fetch, no clock, no randomness, no hashing. It takes one Safe's
 off-chain queue plus three live on-chain reads (`nonce()`, `getThreshold()`, `getOwners()`) and
 returns either the ten `execTransaction` arguments or a **named refusal**. `fetch` *is* available in
 the KeeperHub sandbox; not using it is deliberate, because a pure function can be tested offline
 against real captured bytes and an impure one cannot.
+
+---
+
+## 🏗️ Architecture
+
+<div align="center">
+  <img src="docs/assets/architecture.png" alt="gavel architecture — the Safe Transaction Service queue and three live on-chain reads enter KeeperHub's Safe plugin; src/assemble.mjs decides purely and returns either ten execTransaction arguments or one of seven named refusals; Direct Execution broadcasts from a wallet that owns none of the Safe; KeeperHub's own execution rows are the audit ledger." width="100%">
+</div>
+
+Four surfaces carry one transaction, and only one of them is ours. The queue and the
+signatures come from the Safe Transaction Service; the liveness reads and the broadcast happen
+inside KeeperHub; the chain and the receipt belong to Base and Etherscan. What gavel adds is
+the middle box — a pure function that turns a queue plus three on-chain reads into either ten
+`execTransaction` arguments or a refusal with a name.
 
 ---
 
