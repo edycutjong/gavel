@@ -66,9 +66,22 @@ jobs:
         run: npm audit --audit-level=high
         continue-on-error: true
 
+  survey:
+    name: "Stage 2 · Published figures re-derive"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      # The 92.6% figure is the most load-bearing claim in the README. This asserts
+      # it — and 21 other published numbers — against the committed survey data, so
+      # the prose cannot drift away from the measurement without CI going red.
+      - name: Re-derive every published survey figure
+        run: python3 survey/rederive.py
+
   gate:
     name: "Stage 3 · Gate"
-    needs: [quality, purity, security]
+    needs: [quality, purity, security, survey]
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:

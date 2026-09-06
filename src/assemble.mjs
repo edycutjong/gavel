@@ -367,6 +367,7 @@ export function assemble(input) {
   const required = Math.max(thresholdQueue, thresholdOnchain);
   // thresholdOnchain is already >= 1, so required is too. Asserted anyway: this is
   // the line whose absence made an empty blob executable, and it costs nothing.
+  /* node:coverage ignore next 3 */
   if (!Number.isInteger(required) || required < 1) {
     return refuse('malformed-payload', `computed threshold ${required} is not >= 1.`, withSigners);
   }

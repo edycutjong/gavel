@@ -48,6 +48,14 @@ transactions; the data we collected ourselves does not support it.
 can concatenate signatures. Knowing which 7.4% are real — and then which of those would actually
 land — is the hard part, and it is measurable.
 
+**Every number in that table is reproducible from this repo.** The scripts that made the calls, the
+raw responses they returned, and a re-derivation that asserts all 22 published figures are committed
+at [`survey/`](survey/) — and CI runs it, so the prose cannot drift away from the measurement:
+
+```bash
+python3 survey/rederive.py     # offline, no credentials, ~0.2s
+```
+
 Method in brief: Safe addresses derived from `ProxyCreation` and `ExecutionSuccess` logs on
 `mainnet.base.org`; queues pulled from the Safe Transaction Service; liveness decided against
 **on-chain** `nonce()` / `getThreshold()` / `getOwners()`, every confirmation `ecrecover`'d against
@@ -304,6 +312,7 @@ refusing correctly is a success, not an error.
 | [`scripts/sync.mjs`](scripts/sync.mjs) | Emits the workflow JSON per chain (Safe plugin reads on 8453, `web3/read-contract` on testnets — see DX-6) |
 | [`scripts/audit.mjs`](scripts/audit.mjs) | Renders KeeperHub execution rows. Renders; never computes |
 | [`test/`](test/) | 64 tests: unit fixtures, the live-response regression file, and manifest/roster invariants |
+| [`survey/`](survey/) | The 1,299-Safe measurement: collectors, 1.3 MB of raw responses, and `rederive.py`, which asserts all 22 published figures offline |
 | [`DX-REPORT.md`](DX-REPORT.md) | Seven reproducible KeeperHub findings, dated as they were hit |
 | [`workflows/`](workflows/) | Generated `gavel-drain` graph, 11 nodes (1 trigger + 10 actions), 10 edges |
 | [`docs/rehearsal-11155111.md`](docs/rehearsal-11155111.md) | Rehearsal log. Labelled NOT EVIDENCE |
