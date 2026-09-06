@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://edycutjong.github.io/gavel/sitemap.xml
+Sitemap: https://gavel.edycu.dev/sitemap.xml

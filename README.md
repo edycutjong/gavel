@@ -12,8 +12,8 @@
 
   <br/>
 
-  [![Live](https://img.shields.io/badge/🚀_Live-Site-06b6d4?style=for-the-badge)](https://edycutjong.github.io/gavel/)
-  [![Pitch Deck](https://img.shields.io/badge/📊_Pitch-Deck-f59e0b?style=for-the-badge)](https://edycutjong.github.io/gavel/deck.html)
+  [![Live](https://img.shields.io/badge/🚀_Live-Site-06b6d4?style=for-the-badge)](https://gavel.edycu.dev/)
+  [![Pitch Deck](https://img.shields.io/badge/📊_Pitch-Deck-f59e0b?style=for-the-badge)](https://gavel.edycu.dev/deck.html)
   [![Built for The Agent Economy](https://img.shields.io/badge/DoraHacks-Agent_Economy-8b5cf6?style=for-the-badge)](https://dorahacks.io/hackathon/agent-economy)
 
   <br/>
