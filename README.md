@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <img alt="tests" src="https://img.shields.io/badge/tests-50%20passing%20in%20~0.07s-2ea44f">
+  <img alt="tests" src="https://img.shields.io/badge/tests-64%20passing%20in%20~0.07s-2ea44f">
   <img alt="deps" src="https://img.shields.io/badge/decision%20surface-zero%20deps%2C%20zero%20I%2FO-blue">
   <img alt="node" src="https://img.shields.io/badge/node-%E2%89%A520-339933">
   <img alt="keeperhub" src="https://img.shields.io/badge/KeeperHub-Safe%20plugin%20%2B%20Direct%20Execution-6c4cf1">
@@ -180,7 +180,7 @@ Also standing up today:
   only executions so far are on the rehearsal chain. The rehearsal log lives separately at
   [`docs/rehearsal-11155111.md`](docs/rehearsal-11155111.md) and is labelled **NOT EVIDENCE** at the top.
 - **The `gavel-drain` workflow cannot be created on our plan.** `POST /api/workflows/create` rejects
-  the finished 10-node graph with `upgrade_required`: both `code/run-code` (which holds the entire
+  the finished 11-node graph with `upgrade_required`: both `code/run-code` (which holds the entire
   decision surface) and `HTTP Request` (needed only *because* of the DX-1 gap above) require **pro**,
   and nothing — schemas, `get_plugin`, or 106 crawled doc pages — discloses that before create time.
   That is **DX-7**. [`scripts/drain.mjs`](scripts/drain.mjs) reaches the same on-chain outcome through
@@ -305,7 +305,7 @@ refusing correctly is a success, not an error.
 | [`scripts/audit.mjs`](scripts/audit.mjs) | Renders KeeperHub execution rows. Renders; never computes |
 | [`test/`](test/) | 64 tests: unit fixtures, the live-response regression file, and manifest/roster invariants |
 | [`DX-REPORT.md`](DX-REPORT.md) | Seven reproducible KeeperHub findings, dated as they were hit |
-| [`workflows/`](workflows/) | Generated `gavel-drain` graph, 10 nodes |
+| [`workflows/`](workflows/) | Generated `gavel-drain` graph, 11 nodes (1 trigger + 10 actions), 10 edges |
 | [`docs/rehearsal-11155111.md`](docs/rehearsal-11155111.md) | Rehearsal log. Labelled NOT EVIDENCE |
 
 ---
