@@ -137,6 +137,20 @@
        font-variant-numeric:tabular-nums;margin:0}
   .pct em{font-style:normal;color:var(--dead-lg)}
 
+  /* the integration table — the thing this event is actually judged on */
+  .arch{width:100%;margin:0;border-radius:12px;display:block}
+  .surf{width:100%;border-collapse:collapse;margin-top:18px;font-size:14px}
+  .surf td{padding:10px 0;border-top:1px solid var(--line);vertical-align:top}
+  .surf tr:first-child td{border-top:0}
+  .surf td:first-child{font-family:var(--mono);font-size:12.5px;color:var(--amber);
+    white-space:nowrap;padding-right:18px;width:1%}
+  .surf td:last-child{color:var(--mid)}
+  .surf b{color:var(--hi);font-weight:600}
+  @media(max-width:640px){
+    .surf td{display:block;border-top:0;padding:2px 0}
+    .surf tr{display:block;padding:10px 0;border-top:1px solid var(--line)}
+    .surf td:first-child{width:auto}
+  }
   ol{counter-reset:s;list-style:none;padding:0;margin:0}
   ol li{counter-increment:s;position:relative;padding:16px 0 16px 52px;border-bottom:1px solid var(--line);
     border-radius:10px;transition:background .2s ease}
@@ -225,6 +239,31 @@
       <p>On-chain <code>execTransaction</code>. Costs gas. Permissionless — <b style="color:var(--hi)">anyone</b> may call it. Assigned to no one, so it does not happen.</p>
       <span class="tag">▲ Nobody's job</span>
     </div>
+  </div>
+
+  <h2>How KeeperHub runs this</h2>
+  <div class="card reveal" style="padding:20px">
+    <picture>
+      <source srcset="assets/architecture.webp" type="image/webp">
+      <img class="arch" src="assets/architecture.png" width="1760" height="955" loading="lazy"
+           decoding="async"
+           alt="Four stages left to right. The Safe Transaction Service supplies the queue and the owner signatures. KeeperHub's Safe plugin performs four reads: the queue, nonce, threshold and owners. src/assemble.mjs decides purely and returns either ten execTransaction arguments or one of seven named refusals. KeeperHub Direct Execution simulates, then broadcasts from a wallet that owns none of the Safe. KeeperHub's own execution rows are the audit ledger.">
+    </picture>
+    <table class="surf">
+      <tr><td>Safe plugin</td><td><b>Four reads, no writes.</b> The queue, plus <code>nonce()</code>,
+        <code>getThreshold()</code> and <code>getOwners()</code>. All seven plugin actions are reads —
+        which is exactly why the write below has to exist.</td></tr>
+      <tr><td>execute/<wbr>contract-call</td><td><b>Direct Execution.</b> Always <code>simulate: true</code>
+        as a preflight, then the real call with an <code>Idempotency-Key</code>, so a retry cannot
+        double-broadcast.</td></tr>
+      <tr><td>analytics/<wbr>runs</td><td><b>The audit ledger.</b> KeeperHub's own execution rows carry
+        <code>verified</code>, <code>receiptStatus</code>, <code>blockNumber</code> and <code>gasUsed</code>.
+        <code>audit.mjs</code> renders them and never computes one.</td></tr>
+      <tr><td>workflows/<wbr>create</td><td><b>The graph.</b> Eleven nodes, ten edges, generated per chain by
+        <code>sync.mjs</code>, which injects <code>assemble.mjs</code> <b>verbatim</b> into the Code node —
+        so the function the tests run offline and the function the canvas runs on-chain cannot drift
+        apart.</td></tr>
+    </table>
   </div>
 
   <h2>The finding this is built on</h2>
@@ -325,7 +364,7 @@
 
   <footer>
     gavel · MIT · built for the KeeperHub Agent Economy hackathon<br>
-    This page is one static file: no network request, nothing stored, nothing asserted on its own
+    This page is one static file and its images: it calls no API, stores nothing, and asserts nothing on its own
     authority. Every number above is checkable on the five surfaces listed, none of them ours.
     <b style="color:var(--body)">Check any of them.</b>
   </footer>
