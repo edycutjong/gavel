@@ -300,13 +300,12 @@
     Ethereum Sepolia. <code>EVIDENCE.md</code> is absent by design, not empty by accident —
     <code>scripts/audit.mjs</code> refuses to write a row from a chain marked
     <code>receiptsEligible: false</code>.</p>
-    <p style="margin:0 0 10px"><b style="color:var(--hi)">The workflow is not deployed.</b>
+    <p style="margin:0"><b style="color:var(--hi)">The workflow is not deployed on the canvas.</b>
     <code>code/run-code</code> and <code>HTTP Request</code> require a paid KeeperHub plan.
     <code>scripts/drain.mjs</code> reaches the same on-chain outcome through the Direct Execution API,
     which is not gated — but it decides here and asks KeeperHub to execute, rather than deciding
-    inside KeeperHub. That is a weaker answer and we are not going to blur it.</p>
-    <p style="margin:0"><b style="color:var(--hi)">No published demo video, no Hub publication, no
-    Marketplace listing</b> as of <time datetime="2026-09-06">6 September 2026</time>.</p>
+    inside KeeperHub. That is a weaker answer and we are not going to blur it. The same gate is why
+    there is no Hub entry and no Marketplace listing: both require a created workflow.</p>
   </div>
 
   <h2>What is done</h2>
