@@ -1,6 +1,13 @@
 {
   "$comment": "The opt-in list. Invariant I3: a Safe absent from this file is never executed against, and assemble.mjs re-checks it independently of roster-1 because the public Marketplace listing is a caller-open door. Populated by scripts/seed.mjs once the mainnet cast is deployed.",
   "byChain": {
+    "8453": [
+      "0xB8709787228046C4612D969A153942e1693e6169",
+      "0x771688040acE3aC2734b8c133f84EEfE13E7Cf42",
+      "0x11C20c253fDfBA4481C96faaCdE9Ad66438690d0",
+      "0x545618b334A23e942c7BC2Cd018eBa66bfDBDaaB",
+      "0xe1273328800BeFA0ba234b6142C3077EB36E6598"
+    ],
     "11155111": [
       "0xB8709787228046C4612D969A153942e1693e6169",
       "0x771688040acE3aC2734b8c133f84EEfE13E7Cf42",
