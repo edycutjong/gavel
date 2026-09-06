@@ -1,21 +1,33 @@
-<p align="center">
+<div align="center">
+
+  <img src="docs/assets/icon.svg" alt="gavel Icon" width="144">
+
+  <h1>gavel ⚖️</h1>
+
+  <p><em>Executes threshold-met Safe transactions from a wallet that owns nothing.</em></p>
+
   <img src="docs/assets/readme-hero-animated.svg"
        alt="gavel — executes Safe transactions that reached their signature threshold but were never executed. A threshold-met Safe transaction waits amber; the gavel falls, and it turns mint: executed."
        width="100%">
-</p>
 
-<p align="center">
-  <b>gavel — "Last Signature"</b><br>
-  Executes threshold-met Safe transactions from a wallet that owns nothing.
-</p>
+  <br/>
 
-<p align="center">
-  <img alt="tests" src="https://img.shields.io/badge/tests-64%20passing%20in%20~0.07s-2ea44f">
-  <img alt="deps" src="https://img.shields.io/badge/decision%20surface-zero%20deps%2C%20zero%20I%2FO-blue">
-  <img alt="node" src="https://img.shields.io/badge/node-%E2%89%A520-339933">
-  <img alt="keeperhub" src="https://img.shields.io/badge/KeeperHub-Safe%20plugin%20%2B%20Direct%20Execution-6c4cf1">
-  <img alt="safe" src="https://img.shields.io/badge/Safe-Transaction%20Service-12ff80">
-</p>
+  [![Live](https://img.shields.io/badge/🚀_Live-Site-06b6d4?style=for-the-badge)](https://edycutjong.github.io/gavel/)
+  [![Pitch Deck](https://img.shields.io/badge/📊_Pitch-Deck-f59e0b?style=for-the-badge)](https://edycutjong.github.io/gavel/deck.html)
+  [![Built for The Agent Economy](https://img.shields.io/badge/DoraHacks-Agent_Economy-8b5cf6?style=for-the-badge)](https://dorahacks.io/hackathon/agent-economy)
+
+  <br/>
+
+  ![tests](https://img.shields.io/badge/tests-80%20passing%20in%20~0.08s-2ea44f?style=flat)
+  ![coverage](https://img.shields.io/badge/assemble.mjs-100%25%20line%20%2F%20branch-2ea44f?style=flat)
+  ![deps](https://img.shields.io/badge/decision%20surface-zero%20deps%2C%20zero%20I%2FO-blue?style=flat)
+  ![node](https://img.shields.io/badge/node-%E2%89%A520-339933?style=flat)
+  ![keeperhub](https://img.shields.io/badge/KeeperHub-Safe%20plugin%20%2B%20Direct%20Execution-6c4cf1?style=flat)
+  ![safe](https://img.shields.io/badge/Safe-Transaction%20Service-12ff80?style=flat)
+  [![License](https://img.shields.io/badge/License-MIT-yellow?style=flat)](https://opensource.org/licenses/MIT)
+  [![CI](https://github.com/edycutjong/gavel/actions/workflows/ci.yml/badge.svg)](https://github.com/edycutjong/gavel/actions/workflows/ci.yml)
+
+</div>
 
 ---
 
@@ -111,6 +123,28 @@ behaviour is "never fires" must still not fall through to execution:
 
 ---
 
+## 🏆 KeeperHub Integration
+
+KeeperHub is not a deployment target bolted on at the end — it is the runtime. gavel has no server,
+no scheduler and no wallet of its own; every read, every gate and the broadcast itself happen inside
+KeeperHub. Four API surfaces and the Safe plugin carry the whole flow:
+
+| Surface | Where | What it does here |
+|---|---|---|
+| **Safe plugin** (reads) | `queue-1`, `threshold-1`, `owners-1`, `nonce-1` | Pulls the off-chain queue plus the three live on-chain reads the pure function needs. All **7** Safe plugin actions are reads — there is no write action, which is exactly why `exec-1` exists |
+| **`POST /api/execute/contract-call`** | [`scripts/drain.mjs`](scripts/drain.mjs) | Direct Execution. Always `simulate: true` as a preflight, then the real call with an `Idempotency-Key` so a retry can never double-broadcast |
+| **`GET /api/analytics/runs`** | [`scripts/audit.mjs`](scripts/audit.mjs) | KeeperHub's own execution rows — `verified`, `receiptStatus`, `blockNumber`, `gasUsed` — are the audit ledger. We render them; we never compute them |
+| **`GET /api/integrations`** | [`scripts/drain.mjs`](scripts/drain.mjs) | Resolves the executor wallet, and is where **DX-4** (unopt-outable gas sponsorship) was found |
+| **`POST /api/workflows/create`** | [`scripts/sync.mjs`](scripts/sync.mjs) | Emits the `gavel-drain` graph per chain — **11 nodes** (1 trigger + 10 actions), 10 edges, committed at [`workflows/`](workflows/) |
+
+The graph is generated, never hand-drawn: `sync.mjs` injects [`src/assemble.mjs`](src/assemble.mjs)
+**verbatim** into the Code node, so the function the tests run offline and the function the canvas
+runs on-chain cannot drift apart. That is the whole reason the decision surface is pure.
+
+Seven reproducible findings came out of building against it, dated as they were hit and filed
+upstream — see [`DX-REPORT.md`](DX-REPORT.md).
+
+---
 ## 🕳️ The gap that would have silently disarmed a security guard
 
 `safe/get-pending-transactions` documents its output as *"safeTxHash, to, value, data, operation,
@@ -172,7 +206,7 @@ Also standing up today:
 
 - **12 Safes deployed and funded** on Ethereum Sepolia from one manifest, CREATE2-deterministic —
   thresholds 1-of-2 through 3-of-5, five of them on the opt-in roster.
-- **64 tests, ~0.07 s**, including [`test/live-fixture.test.mjs`](test/live-fixture.test.mjs), which
+- **80 tests, ~0.08 s**, including [`test/live-fixture.test.mjs`](test/live-fixture.test.mjs), which
   runs the untouched `assemble.mjs` over a **committed real Safe Transaction Service response**. Unit
   fixtures prove we are self-consistent; that file proves we match reality, and they are deliberately
   two different files.
@@ -259,7 +293,7 @@ decision surface.
 ```bash
 git clone <this repo> && cd gavel
 npm install
-npm test                       # 64 tests, ~0.07 s, no network, no keys
+npm test                       # 80 tests, ~0.08 s, no network, no keys
 ```
 
 That suite includes `test/live-fixture.test.mjs`, which runs `src/assemble.mjs` over a committed real
@@ -311,7 +345,7 @@ refusing correctly is a success, not an error.
 | [`scripts/verify-assemble.mjs`](scripts/verify-assemble.mjs) | The pure function against a live queue; `--write-fixture` turns today's response into a regression test |
 | [`scripts/sync.mjs`](scripts/sync.mjs) | Emits the workflow JSON per chain (Safe plugin reads on 8453, `web3/read-contract` on testnets — see DX-6) |
 | [`scripts/audit.mjs`](scripts/audit.mjs) | Renders KeeperHub execution rows. Renders; never computes |
-| [`test/`](test/) | 64 tests: unit fixtures, the live-response regression file, and manifest/roster invariants |
+| [`test/`](test/) | 80 tests: unit fixtures, the live-response regression file, manifest/roster invariants, and the coverage-gap suite ([`COVERAGE.md`](test/COVERAGE.md)) |
 | [`survey/`](survey/) | The 1,299-Safe measurement: collectors, 1.3 MB of raw responses, and `rederive.py`, which asserts all 22 published figures offline |
 | [`DX-REPORT.md`](DX-REPORT.md) | Seven reproducible KeeperHub findings, dated as they were hit |
 | [`workflows/`](workflows/) | Generated `gavel-drain` graph, 11 nodes (1 trigger + 10 actions), 10 edges |
@@ -333,4 +367,6 @@ refusing correctly is a success, not an error.
 
 ---
 
-MIT.
+## 📄 License
+
+MIT — see [`LICENSE`](LICENSE).
