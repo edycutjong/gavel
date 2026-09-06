@@ -25,7 +25,7 @@
  * KEY=value, so it must be parsed and must never be `source`d.
  */
 
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -365,13 +365,45 @@ async function cmdStage(chain, cast, flags) {
   console.log(`  THRESHOLD MET AND DELIBERATELY UNEXECUTED — this is the condition gavel drains.\n`);
 }
 
+/**
+ * roster — regenerate src/roster.json from the manifest.
+ *
+ * The opt-in list is DERIVED, never hand-kept: a Safe is on the roster because the
+ * manifest says so, and its address comes from the same CREATE2 prediction every
+ * other command uses. Hand-editing this file is how a Safe ends up executable that
+ * nobody decided to make executable.
+ */
+async function cmdRoster(chain, cast, flags) {
+  const existing = JSON.parse(readFileSync(join(ROOT, 'src', 'roster.json'), 'utf8'));
+  const wanted = MANIFEST.safes.filter((s) => s.roster);
+  const safes = [];
+  for (const safe of wanted) {
+    safes.push(await (await predictedKit(safe, chain, cast, undefined)).getAddress());
+  }
+  const next = {
+    ...existing,
+    byChain: { ...(existing.byChain ?? {}), [chain.id]: safes },
+  };
+  delete next.chainId; delete next.safes;      // supersede the flat single-chain shape
+  const path = join(ROOT, 'src', 'roster.json');
+  if (!flags.yes) {
+    console.log(`\n  ${chain.name} (${chain.id}) — ${safes.length} roster Safe(s):`);
+    wanted.forEach((s, i) => console.log(`    ${s.id.padEnd(14)} ${safes[i]}`));
+    console.log(`\n  Dry run. Re-run with --yes to write ${path.replace(ROOT, 'build')}.\n`);
+    return;
+  }
+  writeFileSync(path, JSON.stringify(next, null, 2) + '\n');
+  console.log(`\n  wrote ${safes.length} roster Safe(s) for chain ${chain.id} to build/src/roster.json`);
+  console.log(`  re-run scripts/sync.mjs to embed them in the workflow\n`);
+}
+
 /* ------------------------------------------------------------------ main */
 
 const { cmd, flags } = parseArgs(process.argv);
 const chain = resolveChain(flags);
 const cast = loadCast();
 
-const COMMANDS = { status: cmdStatus, predict: cmdPredict, deploy: cmdDeploy, fund: cmdFund, stage: cmdStage };
+const COMMANDS = { status: cmdStatus, predict: cmdPredict, deploy: cmdDeploy, fund: cmdFund, stage: cmdStage, roster: cmdRoster };
 if (!COMMANDS[cmd]) {
   die(`unknown command "${cmd ?? ''}". Expected one of: ${Object.keys(COMMANDS).join(', ')}`);
 }
