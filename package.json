@@ -10,5 +10,10 @@
   "scripts": {
     "test": "node --test"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "@safe-global/api-kit": "^3.0.2",
+    "@safe-global/protocol-kit": "^5.2.27",
+    "viem": "^2.56.3"
+  }
 }
