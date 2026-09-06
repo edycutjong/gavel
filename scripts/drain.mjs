@@ -83,6 +83,20 @@ const read = (fn) => client.readContract({ address: safeAddress, abi: SAFE_ABI, 
 console.log(`\n  ${chain.name} (${chainId}) — draining ${safeAddress}`);
 if (!chain.receiptsEligible) console.log(`  NOTE  receiptsEligible=false — nothing here may enter EVIDENCE.md.`);
 
+// A Safe absent from this chain reads as "not a contract", and viem surfaces
+// that as a raw ContractFunctionZeroDataError with a stack trace naming
+// `nonce()` -- which reads as a broken ABI rather than an undeployed Safe. It
+// is a precondition failure and belongs on the exit-1 channel with the other
+// preconditions above, so a sweep over the roster names the Safe and stops
+// instead of burying the reason in a trace. Checked before the tx-service call
+// because there is no point asking for the queue of a Safe that is not there.
+const code = await client.getCode({ address: safeAddress });
+if (!code || code === '0x') {
+  console.error(`  NOT DEPLOYED  no code at ${safeAddress} on ${chain.name} (${chainId})`);
+  console.error(`                deploy the cast first: node scripts/seed.mjs deploy --chain ${chainId}`);
+  process.exit(1);
+}
+
 // ---- read: off-chain queue + on-chain state -------------------------------
 const res = await fetch(`${chain.txService}/safes/${safeAddress}/multisig-transactions/?executed=false&ordering=nonce&limit=20`,
   { headers: { Authorization: `Bearer ${safeKey}` } });
