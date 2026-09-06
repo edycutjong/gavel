@@ -305,14 +305,30 @@
     <code>scripts/drain.mjs</code> reaches the same on-chain outcome through the Direct Execution API,
     which is not gated — but it decides here and asks KeeperHub to execute, rather than deciding
     inside KeeperHub. That is a weaker answer and we are not going to blur it.</p>
-    <p style="margin:0"><b style="color:var(--hi)">No demo video, no Hub publication, no Marketplace
-    listing</b> as of this page's last update.</p>
+    <p style="margin:0"><b style="color:var(--hi)">No published demo video, no Hub publication, no
+    Marketplace listing</b> as of <time datetime="2026-09-06">6 September 2026</time>.</p>
+  </div>
+
+  <h2>What is done</h2>
+  <div class="card reveal" style="font-size:15px">
+    <p style="margin:0 0 10px"><b style="color:var(--hi)">The decision surface is finished and pure.</b>
+    <code>src/assemble.mjs</code> — zero dependencies, zero I/O, seven named pre-broadcast refusals,
+    <b style="color:var(--hi)">80 tests at 100% line and branch coverage</b>, one of them run against a
+    committed real Transaction Service response rather than a fixture we invented.</p>
+    <p style="margin:0 0 10px"><b style="color:var(--hi)">The number this is built on is reproducible.</b>
+    1,299 Base mainnet Safes, and all 22 published figures re-derive offline from the raw responses
+    committed beside them — <code>python3 survey/rederive.py</code>, no network, no credentials. CI runs it,
+    so the prose cannot drift from the measurement.</p>
+    <p style="margin:0"><b style="color:var(--hi)">And it works.</b> A Safe was drained on-chain by an
+    address that owns none of it, and <code>isOwner(executor)</code> returns <em style="color:var(--green);font-style:normal">false</em>
+    for anyone who checks. Testnet, and labelled as such — but the mechanism is not a diagram.</p>
   </div>
 
   <footer>
     gavel · MIT · built for the KeeperHub Agent Economy hackathon<br>
-    This page is one static file. It makes no network request, stores nothing, and asserts nothing on
-    its own authority — every number above links to a surface we do not operate.
+    This page is one static file: no network request, nothing stored, nothing asserted on its own
+    authority. Every number above is checkable on the five surfaces listed, none of them ours.
+    <b style="color:var(--body)">Check any of them.</b>
   </footer>
 
 </div>
