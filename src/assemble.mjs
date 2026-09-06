@@ -61,12 +61,32 @@ export const PRE_BROADCAST_REFUSALS = Object.freeze(REFUSALS.slice(0, 7));
  *                      would silently disarm the single most dangerous guard in the
  *                      design. Refuse instead.
  */
-export const SECURITY_REFUSALS = Object.freeze(['not-on-roster', 'incomplete-payload']);
+export const SECURITY_REFUSALS = Object.freeze([
+  'not-on-roster', 'incomplete-payload', 'malformed-payload',
+]);
 
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
+const ADDRESS_RE = /^0x[0-9a-fA-F]{40}$/;
 
 /** Signature types we refuse outright (invariant I7). */
 const REFUSED_SIGNATURE_TYPES = Object.freeze(['CONTRACT_SIGNATURE', 'APPROVED_HASH']);
+
+/**
+ * The ONLY `v` values checkSignatures treats as an ECDSA signature.
+ *   27/28 — EIP-712 (eth_signTypedData)
+ *   31/32 — eth_sign, i.e. 27/28 + 4
+ *
+ * Everything else is a different scheme wearing 65 bytes:
+ *   v = 0  CONTRACT_SIGNATURE. `s` is an offset into the blob and `r` is a
+ *          contract address that checkSignatures CALLS (EIP-1271). That is an
+ *          attacker-controlled external call from inside execTransaction.
+ *   v = 1  APPROVED_HASH. `r` is an owner address and no signature is verified.
+ *
+ * I7 previously refused these by reading `signatureType`, a field the service
+ * supplies and an attacker-fed payload can simply omit. This set is checked on
+ * the BYTES, which cannot be omitted.
+ */
+const PASSTHROUGH_V = Object.freeze([27, 28, 31, 32]);
 
 /** The five fields the Safe plugin does not return; hydrate-1 must supply them. */
 const HYDRATED_FIELDS = Object.freeze([
@@ -102,6 +122,29 @@ function isZeroAddress(value) {
 /** A 65-byte ECDSA signature: "0x" + 130 hex characters. */
 function isWellFormedSignature(sig) {
   return typeof sig === 'string' && /^0x[0-9a-fA-F]{130}$/.test(sig.trim());
+}
+
+/** The trailing byte of a 65-byte signature, as a number. */
+function signatureV(sig) {
+  return parseInt(String(sig).trim().slice(-2), 16);
+}
+
+/**
+ * A non-negative count, or null when the value is not one.
+ *
+ * `toBig` accepts "-5" happily, because BigInt does. A negative threshold made
+ * `signerCount < required` false and then `slice(0, -5)` counted from the END and
+ * returned an empty array — producing `executable: true` with an EMPTY signature
+ * blob. Counts get their own parser so that cannot recur.
+ */
+function toCount(value) {
+  try {
+    const n = toBig(value, 'count');
+    if (n < 0n || n > 1000n) return null;
+    return Number(n);
+  } catch {
+    return null;
+  }
 }
 
 function refuse(reason, detail, provenance = {}) {
@@ -140,23 +183,49 @@ export function assemble(input) {
     onchainOwners = [],
   } = input ?? {};
 
-  const transactions = Array.isArray(queue.transactions) ? queue.transactions : [];
+  // ---- input validation ----------------------------------------------------
+  // Every guard below assumes well-formed inputs. Rather than trusting that, the
+  // malformed cases become a NAMED refusal here. Previously several of them threw
+  // out of the function instead, which in the workflow is an errored Code node —
+  // an undeclared tenth outcome whose effect on the downstream gate is untested.
+  const transactions = Array.isArray(queue?.transactions) ? queue.transactions : [];
   const queueDepth = transactions.length;
 
-  const nonceOnchain = toBig(onchainNonce, 'onchainNonce');
-  const thresholdOnchain = Number(toBig(onchainThreshold, 'onchainThreshold'));
-  const owners = onchainOwners.map(lower);
-
+  const nonceOnchain = toCount(onchainNonce);
+  const thresholdOnchain = toCount(onchainThreshold);
   const base = {
-    onchainNonce: nonceOnchain.toString(),
-    threshold: thresholdOnchain,
+    onchainNonce: nonceOnchain === null ? '' : String(nonceOnchain),
+    threshold: thresholdOnchain ?? 0,
     queueDepth,
   };
+
+  if (!ADDRESS_RE.test(String(safeAddress ?? ''))) {
+    return refuse('malformed-payload', `safeAddress ${safeAddress} is not a 20-byte address.`, base);
+  }
+  if (nonceOnchain === null) {
+    return refuse('malformed-payload', `onchainNonce ${onchainNonce} is not a valid count.`, base);
+  }
+  // A threshold of 0 is not a Safe. Treating it as one made an EMPTY signature
+  // blob executable, which is the failure this check exists for.
+  if (thresholdOnchain === null || thresholdOnchain < 1) {
+    return refuse('malformed-payload', `onchainThreshold ${onchainThreshold} is not >= 1.`, base);
+  }
+  if (!Array.isArray(onchainOwners) || onchainOwners.length === 0) {
+    return refuse('malformed-payload', 'onchainOwners is empty or not an array.', base);
+  }
+  const owners = onchainOwners.map(lower);
 
   // ---- I3 · roster ---------------------------------------------------------
   // Checked here and not only in roster-1, because the Marketplace listing is a
   // caller-open door and roster-1 is bypassable through it.
-  if (!roster.map(lower).includes(lower(safeAddress))) {
+  //
+  // Falsy entries are filtered BEFORE the membership test. lower() maps undefined,
+  // null and "" all to "", so a single stray "" in roster.json used to match a
+  // missing safeAddress and open the gate for every run.
+  const rosterSet = (Array.isArray(roster) ? roster : [])
+    .filter((a) => ADDRESS_RE.test(String(a ?? '')))
+    .map(lower);
+  if (!rosterSet.includes(lower(safeAddress))) {
     return refuse(
       'not-on-roster',
       `Safe ${safeAddress} is not on the opt-in roster; refusing to execute against it.`,
@@ -168,13 +237,7 @@ export function assemble(input) {
   // The service permits two DIFFERENT proposals at one nonce — that is how
   // "replace transaction" works. Choosing between them is a policy call gavel is
   // not entitled to make, so two candidates refuses just as firmly as zero.
-  const candidates = transactions.filter((tx) => {
-    try {
-      return toBig(tx?.nonce, 'tx.nonce') === nonceOnchain;
-    } catch {
-      return false;
-    }
-  });
+  const candidates = transactions.filter((tx) => toCount(tx?.nonce) === nonceOnchain);
   const candidateCount = candidates.length;
   const prov = { ...base, candidateCount };
 
@@ -196,7 +259,7 @@ export function assemble(input) {
   }
 
   const tx = candidates[0];
-  const withNonce = { ...prov, nonce: toBig(tx.nonce, 'tx.nonce').toString(), safeTxHash: String(tx.safeTxHash ?? '') };
+  const withNonce = { ...prov, nonce: String(toCount(tx.nonce)), safeTxHash: String(tx.safeTxHash ?? '') };
 
   // ---- payload completeness (precondition for I4) --------------------------
   const missing = HYDRATED_FIELDS.filter((f) => tx[f] === undefined || tx[f] === null || tx[f] === '');
@@ -224,7 +287,15 @@ export function assemble(input) {
   // The worst outcome in the design: execTransaction pays the refund from the
   // Safe to refundReceiver and CALLS gasToken, so a hostile token can re-enter.
   // The party this is aimed at is whoever executes — us.
-  const gasPrice = toBig(tx.gasPrice, 'tx.gasPrice');
+  // Parsed fail-closed: an unparseable gasPrice is refused rather than thrown.
+  // This is the guard against the drain vector, so "I could not read it" and
+  // "it was hostile" must reach the same outcome.
+  let gasPrice = null;
+  try { gasPrice = toBig(tx.gasPrice, 'tx.gasPrice'); } catch { gasPrice = null; }
+  if (gasPrice === null) {
+    return refuse('malformed-payload',
+      `gasPrice="${tx.gasPrice}" is not integer-like; refusing rather than assuming zero.`, withNonce);
+  }
   if (gasPrice !== 0n || !isZeroAddress(tx.gasToken) || !isZeroAddress(tx.refundReceiver)) {
     return refuse(
       'refund-requested',
@@ -253,6 +324,21 @@ export function assemble(input) {
     );
   }
 
+  // The check that actually holds. signatureType is an OPTIONAL off-chain label and
+  // a hostile payload simply omits it; v is in the bytes and cannot be. v=0 is an
+  // EIP-1271 contract signature, where checkSignatures CALLS the address in `r` --
+  // an attacker-controlled external call from inside execTransaction. v=1 is an
+  // approved-hash, where nothing is verified at all. Both are exactly 65 bytes.
+  const badV = confirmations.find((c) => !PASSTHROUGH_V.includes(signatureV(c.signature)));
+  if (badV) {
+    const v = signatureV(badV.signature);
+    return refuse(
+      'eip1271-unsupported',
+      `Confirmation from ${badV.owner} has v=${v}; only EOA/eth_sign (27, 28, 31, 32) are spliced.`,
+      withNonce,
+    );
+  }
+
   // ---- I6 · every confirming owner is STILL an owner ----------------------
   // The silent GS026: a signature collected legitimately last week from an owner
   // removed yesterday. Naive tooling broadcasts it.
@@ -277,8 +363,13 @@ export function assemble(input) {
   // ---- I1 · never execute below threshold ---------------------------------
   // Required is the MAX of the queue's cached value and the live on-chain read;
   // trusting the cached one alone is the silent failure this guard exists for.
-  const thresholdQueue = Number(toBig(tx.confirmationsRequired ?? thresholdOnchain, 'tx.confirmationsRequired'));
+  const thresholdQueue = toCount(tx.confirmationsRequired) ?? thresholdOnchain;
   const required = Math.max(thresholdQueue, thresholdOnchain);
+  // thresholdOnchain is already >= 1, so required is too. Asserted anyway: this is
+  // the line whose absence made an empty blob executable, and it costs nothing.
+  if (!Number.isInteger(required) || required < 1) {
+    return refuse('malformed-payload', `computed threshold ${required} is not >= 1.`, withSigners);
+  }
 
   if (signerCount < required) {
     // Distinguish a plain shortfall from the drift case, where the queue believed
@@ -293,6 +384,18 @@ export function assemble(input) {
   }
 
   // Exactly `required` signatures, ascending — checkSignatures needs no more.
+  if (!ADDRESS_RE.test(String(tx.to ?? ''))) {
+    return refuse('malformed-payload', `to ${tx.to} is not a 20-byte address.`, withSigners);
+  }
+  // Every remaining field is coerced below. Any that is not integer-like would
+  // throw out of the function and become an errored code node rather than a named
+  // outcome, so they are checked here while a refusal is still possible.
+  for (const f of ['value', 'safeTxGas', 'baseGas']) {
+    try { toBig(tx[f] ?? 0, f); } catch {
+      return refuse('malformed-payload', `${f}="${tx[f]}" is not integer-like.`, withSigners);
+    }
+  }
+
   const chosen = distinct.slice(0, required);
   const signatures = '0x' + chosen.map((c) => c.signature.trim().replace(/^0x/, '')).join('');
 

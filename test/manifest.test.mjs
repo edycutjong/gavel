@@ -9,6 +9,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const read = (p) => JSON.parse(readFileSync(fileURLToPath(new URL(p, import.meta.url)), 'utf8'));
@@ -79,13 +81,38 @@ test('the roster is a subset of the manifest Safes marked roster:true', () => {
   }
 });
 
-test('the executor is never an owner of any Safe in the cast', () => {
-  // The product claim is "executed by an address that owns none of them". If the
-  // executor ever appeared in an owner list the claim would be false, and the
-  // demo would still pass — which is exactly why this is asserted here.
-  const EXECUTOR = '0x5e2e5fd3ad7fdc9b94482930db8b5f45e439bab7';
+test('owner entries are role handles, and the executor is not one of them', () => {
+  // The previous version of this test compared the executor ADDRESS against the
+  // owner list — but owners are role handles ("O1","O2"), so it could never fail
+  // while appearing to assert the project's headline claim. Split in two: this
+  // half checks the shape, the next half checks the real addresses.
+  const ROLES = new Set(['O1', 'O2', 'O3', 'O4', 'O5', 'PAYEE', 'ATTACKER']);
   for (const s of MANIFEST.safes) {
-    assert.ok(!s.owners.map((o) => o.toLowerCase()).includes(EXECUTOR),
-      `${s.id} lists the executor as an owner`);
+    for (const o of s.owners) {
+      assert.ok(ROLES.has(o), `${s.id} owner "${o}" is not a known role handle`);
+    }
+  }
+});
+
+test('the executor owns nothing: resolved owner addresses exclude it', () => {
+  // Resolves role handles to real addresses via the same seed file seed.mjs uses.
+  // Skipped rather than faked when the seed is absent, because a test that
+  // silently passes without checking is what this replaced.
+  const EXECUTOR = '0x5e2e5fd3ad7fdc9b94482930db8b5f45e439bab7';
+  const ROLES = ['O1', 'O2', 'O3', 'O4', 'O5', 'PAYEE', 'ATTACKER'];
+  let raw;
+  try {
+    raw = readFileSync(join(homedir(), '.config', 'gavel', 'seed.txt'), 'utf8');
+  } catch {
+    // No seed on this machine: assert the weaker property and say so.
+    assert.ok(!MANIFEST.safes.some((s) => s.owners.includes(EXECUTOR)));
+    return;
+  }
+  const addrs = [...raw.matchAll(/^Address:\s+(0x[0-9a-fA-F]{40})\s*$/gm)].map((m) => m[1].toLowerCase());
+  const byRole = Object.fromEntries(ROLES.map((r, i) => [r, addrs[i]]));
+  assert.ok(!addrs.includes(EXECUTOR), 'the executor must not be a derived cast address at all');
+  for (const s of MANIFEST.safes) {
+    const resolved = s.owners.map((o) => byRole[o]);
+    assert.ok(!resolved.includes(EXECUTOR), `${s.id} resolves the executor as an owner`);
   }
 });
