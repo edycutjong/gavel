@@ -147,6 +147,75 @@ way to guarantee it.
 
 ---
 
+## DX-5 · `chainId` is documented as canonical and rejected at runtime
+
+**Severity:** medium — it fails closed, but it contradicts the platform's own schema tips.
+**Date:** 2026-09-02
+
+`GET /api/mcp/schemas` returns this under `tips`:
+
+> *"chainId is the canonical field for the target chain (e.g. 1 for Ethereum mainnet, … 8453 for
+> Base). Accepts a number or stringified number. The legacy `network` field is still accepted as a
+> deprecated alias…"*
+
+Creating a workflow with `config.chainId` is rejected:
+
+```json
+{"code":"UNKNOWN_FIELD","path":"nodes[1].data.config.chainId",
+ "actionType":"safe/get-nonce","message":"Unknown field \"chainId\" for action \"safe/get-nonce\"."}
+```
+
+`network` is required and `chainId` is unknown — the exact inverse of the documentation. Reproduced
+on `safe/get-nonce`, `safe/get-owners`, `safe/get-threshold`, `safe/get-pending-transactions` and
+`web3/read-contract`, so it is not plugin-specific.
+
+The error is clear and fails closed, which is the good case. The cost is that the schema tips are
+the first thing an agent reads when authoring a workflow programmatically — and following them
+produces an invalid workflow every time.
+
+**Suggested fix:** accept `chainId` as the alias the tips promise, or correct the tips to name
+`network` as canonical. Either is a small change; the current state guarantees a failed first
+attempt for anyone who trusts the documentation.
+
+**Adjacent, same session:** `web3/read-contract` requires `abi` **and** `abiFunction`. Supplying
+`functionName` (the natural guess, and the name viem/ethers use) passes create-time validation and
+then fails at runtime with `Missing \`abiFunction\` in the step config`. Moving that check into the
+same validator that already catches `UNKNOWN_FIELD` would turn a runtime failure into a create-time
+one.
+
+---
+
+## DX-6 · One plugin page, two different chain lists, no machine-readable warning
+
+**Severity:** medium — it silently rules out testnet development for a whole plugin.
+**Date:** 2026-09-02
+
+The Safe plugin page states both:
+
+> *"Supported chains for on-chain reads: Ethereum, Base, Arbitrum, Optimism."*
+> *"Pending transaction monitoring supports: … Sepolia, Base Sepolia."*
+
+Both are accurate, and together they mean **the Safe plugin cannot be exercised end to end on any
+testnet**: the queue read works on Sepolia, while `get-nonce`, `get-owners` and `get-threshold`
+reject it with `expected: 1 | 10 | 8453 | 42161`.
+
+For anything that reads a Safe's queue *and* validates it against on-chain state — which is the
+normal shape for a multisig automation — a testnet rehearsal is impossible using the plugin alone.
+The available workaround is to drop to `web3/read-contract` against the Safe's own `view` functions,
+which works on every chain and is what we now do. That is fine, but it has to be discovered by
+hitting the wall.
+
+Nothing surfaces this before create time: `get_plugin safe` returns one flat `chains` array for the
+whole plugin, with no per-action restriction, so an agent planning a workflow cannot see the
+limitation until validation rejects it.
+
+**Suggested fix:** carry the supported-chain set per action in the schema so it can be read
+programmatically, and note on the plugin page that on-chain reads are mainnet-only. If the
+restriction is incidental rather than deliberate, adding the four testnets would remove the need for
+the workaround entirely.
+
+---
+
 ## Notes for filing
 
 - Target repo: `github.com/KeeperHub/keeperhub`. Preflight the issue template's
