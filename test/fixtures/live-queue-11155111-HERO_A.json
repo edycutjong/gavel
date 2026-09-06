@@ -1,0 +1,87 @@
+{
+  "$comment": "Real Safe Transaction Service response, captured 2026-09-02. Committed so the exact shape the service returns is a regression test rather than an assumption.",
+  "chainId": "11155111",
+  "safeAddress": "0xB8709787228046C4612D969A153942e1693e6169",
+  "onchain": {
+    "nonce": "0",
+    "threshold": "2",
+    "owners": [
+      "0x019db835770D29FEd0E96071A59Ed812DFEC0c4a",
+      "0x20A5EdcDB3bf0587545De423cdd8Ba94c7D0D754",
+      "0x0644D5a2b729C3A4D0c5ee9337f29812522492Cf"
+    ]
+  },
+  "queue": {
+    "count": 1,
+    "next": null,
+    "previous": null,
+    "results": [
+      {
+        "safe": "0xB8709787228046C4612D969A153942e1693e6169",
+        "to": "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
+        "value": "0",
+        "data": "0xa9059cbb000000000000000000000000660295c3f3eb0d65cac00521dd393a5184e405b10000000000000000000000000000000000000000000000000000000000989680",
+        "operation": 0,
+        "gasToken": "0x0000000000000000000000000000000000000000",
+        "safeTxGas": "0",
+        "baseGas": "0",
+        "gasPrice": "0",
+        "refundReceiver": "0x0000000000000000000000000000000000000000",
+        "nonce": "0",
+        "executionDate": null,
+        "submissionDate": "2026-09-02T09:11:54.965512Z",
+        "modified": "2026-09-02T09:11:57.678490Z",
+        "blockNumber": null,
+        "transactionHash": null,
+        "safeTxHash": "0x8500a0bd075e3777420fae199f2b17af4f91243b76f10de7402f1f438b25fdc9",
+        "proposer": "0x019db835770D29FEd0E96071A59Ed812DFEC0c4a",
+        "proposedByDelegate": null,
+        "executor": null,
+        "isExecuted": false,
+        "isSuccessful": null,
+        "ethGasPrice": null,
+        "maxFeePerGas": null,
+        "maxPriorityFeePerGas": null,
+        "gasUsed": null,
+        "fee": null,
+        "payment": null,
+        "origin": "{}",
+        "dataDecoded": {
+          "method": "transfer",
+          "parameters": [
+            {
+              "name": "to",
+              "type": "address",
+              "value": "0x660295C3f3EB0D65cac00521DD393a5184E405B1"
+            },
+            {
+              "name": "value",
+              "type": "uint256",
+              "value": "10000000"
+            }
+          ]
+        },
+        "confirmationsRequired": 2,
+        "confirmations": [
+          {
+            "owner": "0x019db835770D29FEd0E96071A59Ed812DFEC0c4a",
+            "submissionDate": "2026-09-02T09:11:55.007212Z",
+            "transactionHash": null,
+            "signature": "0x4d8da5b146d794647932b9caac0f6b009bb1267fa4f96308eb87d4ec7bafbacc6d0c208694214ab592e87cd1278db90a0d832ce164417cf906a4f82f83799dc91f",
+            "signatureType": "ETH_SIGN"
+          },
+          {
+            "owner": "0x20A5EdcDB3bf0587545De423cdd8Ba94c7D0D754",
+            "submissionDate": "2026-09-02T09:11:57.678490Z",
+            "transactionHash": null,
+            "signature": "0x9ea3bd7fdc812fb751ee3aa4e49723ff95fdfb3634cb1ee4ae6cd9f449ea40c7317c7750fb541c5affe3c9174d9324fb0d90ebd6edfda3a48386b676f1069e6e20",
+            "signatureType": "ETH_SIGN"
+          }
+        ],
+        "trusted": true,
+        "signatures": null
+      }
+    ],
+    "countUniqueNonce": 1
+  }
+}

@@ -12,6 +12,7 @@
  *   predict             compute the 12 CREATE2 addresses without deploying. Spends nothing.
  *   deploy              deploy any Safe in the manifest that is not yet on-chain.
  *   fund                move USDC from O1 into each Safe per the manifest.
+ *   stage               propose + sign a payout to threshold, and STOP. Never executes.
  *
  * Usage
  *   node scripts/seed.mjs status  --chain 11155111
@@ -28,9 +29,10 @@ import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createPublicClient, createWalletClient, http, parseUnits, formatUnits, getContract } from 'viem';
+import { createPublicClient, createWalletClient, http, parseUnits, formatUnits, getContract, encodeFunctionData } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import protocolKit from '@safe-global/protocol-kit';
+import SafeApiKit from '@safe-global/api-kit';
 
 // @safe-global/protocol-kit ships CJS with an ESM interop shim, so the class lands
 // one level deeper than the documented `import Safe from ...`. Unwrap defensively
@@ -82,9 +84,21 @@ function loadCast() {
     if (account.address.toLowerCase() !== addresses[i].toLowerCase()) {
       die(`${role}: key #${i + 1} derives ${account.address} but the file says ${addresses[i]}.`);
     }
-    cast[role] = { address: account.address, account };
+    // `pk` is held in memory for protocol-kit, which takes a signer key rather than
+    // a viem account. It is never logged, never written, and never leaves this process.
+    cast[role] = { address: account.address, account, pk: keys[i] };
   });
   return cast;
+}
+
+/** The Safe Transaction Service API key. Single-value file, read not sourced. */
+function loadSafeApiKey() {
+  const path = join(homedir(), '.config', 'gavel', 'safe-api-key');
+  try {
+    return readFileSync(path, 'utf8').trim();
+  } catch {
+    die(`cannot read ${path}\nGet a JWT from https://developer.safe.global then:\n  umask 077 && pbpaste | tr -d '[:space:]' > ${path} && chmod 600 ${path}`);
+  }
 }
 
 /* --------------------------------------------------------------- helpers */
@@ -271,13 +285,93 @@ async function cmdFund(chain, cast, flags) {
   console.log();
 }
 
+/**
+ * stage — manufacture the product condition.
+ *
+ * Builds a USDC payout, has exactly `threshold` owners sign it, proposes it to the
+ * Safe Transaction Service, and then STOPS. The transaction is fully authorised and
+ * deliberately not executed: that is the thing gavel exists to drain, and the thing
+ * that has to age.
+ *
+ * Signing is off-chain and free — no gas, no on-chain transaction. Only the eventual
+ * execTransaction costs anything, and executing is precisely what we do not do here.
+ */
+async function cmdStage(chain, cast, flags) {
+  const id = flags.safe;
+  if (!id || id === true) die(`--safe <ID> is required, e.g. --safe HERO_A`);
+  const safe = MANIFEST.safes.find((s) => s.id === id);
+  if (!safe) die(`unknown safe "${id}"`);
+
+  const client = createPublicClient({ transport: http(chain.rpc) });
+  const usdc = getContract({ address: chain.usdc, abi: ERC20_ABI, client });
+  const apiKit = new SafeApiKit({ chainId: BigInt(chain.id), apiKey: loadSafeApiKey() });
+
+  // Address resolution goes through the same predicted path as every other command,
+  // so a staged transaction can never target a Safe the manifest did not describe.
+  const address = await (await predictedKit(safe, chain, cast, undefined)).getAddress();
+  const code = await client.getCode({ address }).catch(() => undefined);
+  if (!code || code === '0x') die(`${id} is not deployed on ${chain.name}. Run: deploy --chain ${chain.id} --yes`);
+
+  const held = await usdc.read.balanceOf([address]);
+  const amount = flags.amount && flags.amount !== true
+    ? parseUnits(String(flags.amount), 6)
+    : held;                                   // default: pay out everything it holds
+  if (amount === 0n) die(`${id} holds no USDC — nothing to stage. Run: fund --chain ${chain.id} --yes`);
+  if (amount > held) die(`${id} holds ${formatUnits(held, 6)} USDC but ${formatUnits(amount, 6)} was requested.`);
+
+  const to = cast.PAYEE.address;
+  const data = encodeFunctionData({ abi: ERC20_ABI, functionName: 'transfer', args: [to, amount] });
+
+  console.log(`\n  ${chain.name} (${chain.id}) — staging a payout on ${id}`);
+  console.log(`    Safe       ${address}`);
+  console.log(`    payout     ${formatUnits(amount, 6)} USDC -> PAYEE ${to}`);
+  console.log(`    threshold  ${safe.threshold} of ${safe.owners.length}`);
+  if (!flags.yes) { console.log(`\n  Dry run. Re-run with --yes to propose and sign.\n`); return; }
+
+  // The proposer must be an owner. Signing order is irrelevant to the service; the
+  // ASCENDING-owner order checkSignatures requires is imposed later by assemble.mjs.
+  const [proposer, ...rest] = safe.owners;
+  const kit = await Safe.init({ provider: chain.rpc, signer: cast[proposer].pk, safeAddress: address });
+
+  const safeTransaction = await kit.createTransaction({
+    transactions: [{ to: chain.usdc, value: '0', data }],
+  });
+  const safeTxHash = await kit.getTransactionHash(safeTransaction);
+  const proposerSig = await kit.signHash(safeTxHash);
+
+  await apiKit.proposeTransaction({
+    safeAddress: address,
+    safeTransactionData: safeTransaction.data,
+    safeTxHash,
+    senderAddress: cast[proposer].address,
+    senderSignature: proposerSig.data,
+  });
+  console.log(`\n  proposed  safeTxHash ${safeTxHash}`);
+  console.log(`  signed    ${proposer} (proposer)`);
+
+  // Confirm with just enough additional owners to reach threshold — no more. An
+  // over-signed transaction would hide the below-threshold and drift branches we
+  // need reachable elsewhere in the cast.
+  for (const role of rest.slice(0, safe.threshold - 1)) {
+    const ownerKit = await Safe.init({ provider: chain.rpc, signer: cast[role].pk, safeAddress: address });
+    const sig = await ownerKit.signHash(safeTxHash);
+    await apiKit.confirmTransaction(safeTxHash, sig.data);
+    console.log(`  signed    ${role}`);
+  }
+
+  const pending = await apiKit.getPendingTransactions(address);
+  const staged = pending.results.find((t) => t.safeTxHash === safeTxHash);
+  console.log(`\n  queue depth ${pending.count} · confirmations ${staged?.confirmations?.length ?? 0}/${staged?.confirmationsRequired ?? safe.threshold}`);
+  console.log(`  THRESHOLD MET AND DELIBERATELY UNEXECUTED — this is the condition gavel drains.\n`);
+}
+
 /* ------------------------------------------------------------------ main */
 
 const { cmd, flags } = parseArgs(process.argv);
 const chain = resolveChain(flags);
 const cast = loadCast();
 
-const COMMANDS = { status: cmdStatus, predict: cmdPredict, deploy: cmdDeploy, fund: cmdFund };
+const COMMANDS = { status: cmdStatus, predict: cmdPredict, deploy: cmdDeploy, fund: cmdFund, stage: cmdStage };
 if (!COMMANDS[cmd]) {
   die(`unknown command "${cmd ?? ''}". Expected one of: ${Object.keys(COMMANDS).join(', ')}`);
 }
