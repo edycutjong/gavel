@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img"
+     aria-label="gavel — a raised gavel above a strike block it does not own; the gap between them is the signed, unexecuted transaction">
+  <title>gavel</title>
+  <desc>A gavel head held above its strike block. The gap of void between them never closes in the resting mark: the last signature landed, and nothing struck.</desc>
+  <defs>
+    <radialGradient id="underglow" cx="50%" cy="42%" r="58%">
+      <stop offset="0%" stop-color="var(--primary, #FFB020)" stop-opacity="0.20"/>
+      <stop offset="55%" stop-color="var(--primary, #FFB020)" stop-opacity="0.06"/>
+      <stop offset="100%" stop-color="var(--primary, #FFB020)" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- plate: makes the mark self-sufficient on GitHub light AND dark -->
+  <rect x="16" y="16" width="480" height="480" rx="112"
+        fill="var(--bg-base, #0B0E13)" stroke="var(--line-strong, #313C4A)" stroke-width="6"/>
+  <circle cx="256" cy="218" r="200" fill="url(#underglow)"/>
+
+  <!-- the ratified mark (assets/ui/mark.svg), scaled x13 -->
+  <g transform="translate(48 48) scale(13)">
+    <!-- strike block: the treasury. Deliberately quiet — gavel does not own it. -->
+    <rect x="3" y="25" width="26" height="5" rx="2.5" fill="var(--text-mid, #8A97A8)" opacity="0.55"/>
+    <!-- shaft -->
+    <line x1="17" y1="12" x2="26" y2="21" stroke="var(--primary-soft, #FFD27A)" stroke-width="4.2" stroke-linecap="round"/>
+    <!-- head: depth face, then the slab. One flat plane of depth, no gradient. -->
+    <line x1="13" y1="18" x2="23" y2="8" stroke="var(--primary-deep, #B26A00)" stroke-width="10" stroke-linecap="round"/>
+    <line x1="12" y1="17" x2="22" y2="7" stroke="var(--primary, #FFB020)" stroke-width="10" stroke-linecap="round"/>
+  </g>
+</svg>

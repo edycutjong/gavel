@@ -1,0 +1,69 @@
+name: Pages
+
+# Publishes site/ to GitHub Pages.
+#
+# This has to be an Actions deployment rather than the branch setting: Pages'
+# built-in source only offers the repository root or /docs, and the site lives
+# in site/. Nothing here builds anything -- the page is static HTML with no
+# framework and no step -- so the job only uploads the directory.
+#
+# Requires Settings -> Pages -> Source: "GitHub Actions" once, and a public
+# repository (Pages from a private repo needs a paid plan).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'site/**'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Never cancel a deploy midway: a half-published site is worse than a late one.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # Fail loudly here rather than shipping a page whose links 404. These are
+      # the four files the two pages actually reference.
+      - name: Check the site is complete
+        run: |
+          set -euo pipefail
+          for f in site/index.html site/deck.html site/site.webmanifest \
+                   site/assets/icon.svg site/assets/apple-touch-icon.png \
+                   site/assets/og-image.png; do
+            [ -f "$f" ] || { echo "missing: $f"; exit 1; }
+          done
+          # Every local href/src in the two pages must resolve on disk.
+          # Deliberately not `grep | while read`: that runs the loop in a
+          # subshell, so a failure inside it cannot set a variable the parent
+          # will read, and the check passes while reporting nothing.
+          rc=0
+          for page in site/index.html site/deck.html; do
+            refs=$(grep -oE '(href|src)="[^"#:]+"' "$page" | sed -E 's/.*="([^"]+)"/\1/' | sort -u)
+            for ref in $refs; do
+              if [ ! -e "site/$ref" ]; then echo "$page -> missing $ref"; rc=1; fi
+            done
+          done
+          [ "$rc" -eq 0 ] && echo "site OK"
+          exit $rc
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - id: deployment
+        uses: actions/deploy-pages@v4

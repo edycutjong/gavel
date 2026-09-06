@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>gavel — verify it yourself</title>
+<meta name="description" content="Executes Safe multisig transactions that reached their signature threshold but were never executed, from a wallet that owns nothing on the Safe.">
+<meta name="theme-color" content="#0A0D12">
+<meta name="color-scheme" content="dark">
+<link rel="canonical" href="https://edycutjong.github.io/gavel/">
+
+<meta property="og:title" content="gavel — Last Signature">
+<meta property="og:description" content="366 queued Safe transactions looked ready to execute. 92.6% were already dead. gavel executes the 7.4% that are real.">
+<meta property="og:image" content="https://edycutjong.github.io/gavel/assets/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:url" content="https://edycutjong.github.io/gavel/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="gavel">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="gavel — Last Signature">
+<meta name="twitter:description" content="366 queued Safe transactions looked ready to execute. 92.6% were already dead.">
+<meta name="twitter:image" content="https://edycutjong.github.io/gavel/assets/og-image.png">
+
+<link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+<link rel="icon" href="assets/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="icon" href="assets/favicon-16.png" sizes="16x16" type="image/png">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+<link rel="manifest" href="site.webmanifest">
+<style>
+  /* Δ4: one static file. No framework, no build step, no runtime service. This
+     page makes no network request, stores nothing, and asserts nothing on its
+     own authority — every number links to a surface we do not operate. The only
+     script draws the grid in §2 from the counts already printed beside it. */
+  :root{
+    --bg:#0A0D12; --surface:#12161C; --inset:#0E1116;
+    --line:#1F2733; --line-strong:#2A3441;
+    --hi:#E6EDF5; --body:#B9C4D0; --mid:#8A97A8; --low:#5C6874;
+    --amber:#FFB020; --green:#3FD98B; --dead:#39424E;
+    --mono:ui-monospace,"JetBrains Mono",SFMono-Regular,Menlo,monospace;
+    --ui:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0;background:var(--bg);color:var(--body);
+    font-family:var(--ui);font-size:16px;line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+    background-image:radial-gradient(900px 500px at 15% -10%,rgba(255,176,32,.07),transparent 60%),
+                     radial-gradient(700px 500px at 100% 110%,rgba(63,217,139,.06),transparent 60%);
+    background-attachment:fixed;
+  }
+  .wrap{max-width:880px;margin:0 auto;padding:56px 24px 96px}
+  a{color:var(--amber);text-decoration:none;border-bottom:1px solid rgba(255,176,32,.3)}
+  a:hover{border-bottom-color:var(--amber)}
+  a:focus-visible,.deck:focus-visible{outline:2px solid var(--amber);outline-offset:3px;border-radius:3px}
+  code,.mono{font-family:var(--mono)}
+  /* A 42-character hex address has no break opportunity, so on a narrow screen
+     it pushes the whole page sideways. Breaking mid-address is worse-looking
+     than wrapping and far better than a horizontally scrolling page. */
+  code{overflow-wrap:anywhere}
+  h1{font-size:clamp(34px,7vw,44px);line-height:1.05;margin:0;color:var(--hi);letter-spacing:-.025em}
+  h2{font-size:15px;font-family:var(--mono);letter-spacing:.1em;text-transform:uppercase;
+     color:var(--mid);margin:64px 0 18px;font-weight:600}
+  .lede{font-size:clamp(17px,2.4vw,20px);color:var(--body);margin:18px 0 0;max-width:64ch}
+  .badge{display:inline-flex;align-items:center;gap:9px;font-family:var(--mono);font-size:12.5px;
+    letter-spacing:.08em;color:var(--body);padding:6px 13px;border-radius:99px;
+    background:rgba(255,255,255,.04);border:1px solid var(--line-strong)}
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--green);
+       box-shadow:0 0 0 0 rgba(63,217,139,.55);animation:pulse 2.8s ease-out infinite}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(63,217,139,.5)}70%{box-shadow:0 0 0 7px rgba(63,217,139,0)}100%{box-shadow:0 0 0 0 rgba(63,217,139,0)}}
+  .head{display:flex;align-items:center;gap:16px;margin-top:26px}
+  .head img{width:54px;height:54px}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:22px 24px;margin:14px 0}
+
+  /* the split — the idea in one row */
+  .split{display:grid;grid-template-columns:1fr auto 1fr;gap:0;align-items:stretch;margin:14px 0}
+  .split .act{background:var(--surface);border:1px solid var(--line);padding:20px 22px}
+  .split .act:first-child{border-radius:14px 0 0 14px}
+  .split .act:last-child{border-radius:0 14px 14px 0;border-left:0}
+  .split .vs{display:grid;place-items:center;padding:0 14px;font-family:var(--mono);font-size:12px;
+    color:var(--low);background:var(--inset);border-block:1px solid var(--line)}
+  .split h3{margin:0 0 8px;font-size:17px;color:var(--hi);letter-spacing:-.01em}
+  .split p{margin:0;font-size:14.5px;color:var(--mid)}
+  .split .tag{display:block;font-family:var(--mono);font-size:11.5px;letter-spacing:.09em;
+    text-transform:uppercase;margin-top:12px}
+  .split .done .tag{color:var(--green)} .split .undone .tag{color:var(--amber)}
+  @media(max-width:640px){
+    .split{grid-template-columns:1fr}
+    .split .act:first-child{border-radius:14px 14px 0 0}
+    .split .act:last-child{border-radius:0 0 14px 14px;border-left:1px solid var(--line);border-top:0}
+    .split .vs{padding:8px;border-inline:1px solid var(--line)}
+  }
+
+  /* the graveyard — 366 real transactions, 339 of them dead */
+  .grid{display:flex;flex-wrap:wrap;gap:3px;margin:4px 0 18px}
+  .grid i{width:9px;height:9px;border-radius:2px;background:var(--dead);
+          opacity:0;animation:fade .5s ease forwards}
+  .grid i.live{background:var(--amber)}
+  .grid i.nonce{background:#FFD37A}
+  .grid i.ok{background:var(--green);box-shadow:0 0 6px rgba(63,217,139,.8)}
+  @keyframes fade{to{opacity:1}}
+  .key{display:flex;flex-wrap:wrap;gap:16px;font-family:var(--mono);font-size:12.5px;color:var(--mid)}
+  .key span{display:inline-flex;align-items:center;gap:7px}
+  .key b{width:9px;height:9px;border-radius:2px;display:inline-block}
+  .funnel{font-family:var(--mono);font-size:14.5px;margin-top:6px}
+  .funnel div{display:flex;gap:14px;padding:5px 0}
+  .funnel b{min-width:56px;text-align:right;font-size:19px;color:var(--hi);font-variant-numeric:tabular-nums}
+  .funnel .d b,.funnel .d span{color:var(--dead);filter:brightness(1.5)}
+  .funnel .l b,.funnel .l span{color:var(--green)}
+  .pct{font-size:clamp(46px,11vw,72px);line-height:1;color:var(--hi);letter-spacing:-.04em;
+       font-variant-numeric:tabular-nums;margin:0}
+  .pct em{font-style:normal;color:var(--dead);filter:brightness(1.6)}
+
+  ol{counter-reset:s;list-style:none;padding:0;margin:0}
+  ol li{counter-increment:s;position:relative;padding:16px 0 16px 52px;border-bottom:1px solid var(--line)}
+  ol li:last-child{border-bottom:0}
+  ol li::before{content:counter(s);position:absolute;left:0;top:15px;width:32px;height:32px;
+    border-radius:8px;background:var(--inset);border:1px solid var(--line-strong);
+    font-family:var(--mono);font-size:14px;color:var(--amber);display:grid;place-items:center}
+  .expect{display:block;font-family:var(--mono);font-size:13.5px;color:var(--mid);margin-top:5px}
+  .expect em{color:var(--green);font-style:normal}
+  .warn{border-left:3px solid var(--amber);background:rgba(255,176,32,.05);padding:16px 20px;
+    border-radius:0 10px 10px 0;margin:14px 0;font-size:15px}
+  .warn b{color:var(--hi)}
+  .deck{display:inline-flex;align-items:center;gap:10px;font-family:var(--mono);font-size:13.5px;
+    letter-spacing:.05em;color:var(--bg);background:var(--amber);padding:11px 20px;border-radius:10px;
+    border:0;font-weight:600;margin-top:18px}
+  .deck:hover{filter:brightness(1.08)}
+  footer{margin-top:64px;padding-top:22px;border-top:1px solid var(--line);
+    font-family:var(--mono);font-size:12.5px;color:var(--low)}
+  @media(max-width:600px){.wrap{padding:36px 18px 64px}.grid i{width:8px;height:8px}}
+  @media(prefers-reduced-motion:reduce){
+    html{scroll-behavior:auto}
+    *,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;
+      transition-duration:.001ms!important}
+    .grid i{opacity:1}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <span class="badge"><span class="dot"></span>ETHEREUM SEPOLIA · ONE REAL EXECUTION</span>
+
+  <div class="head">
+    <img src="assets/icon.svg" alt="" width="54" height="54">
+    <h1>gavel</h1>
+  </div>
+
+  <p class="lede">
+    Safe splits a multisig transaction into two acts that are not the same act.
+    <b style="color:var(--hi)">Signing</b> happens off-chain, free.
+    <b style="color:var(--hi)">Executing</b> costs gas, can be done by anyone, and is
+    nobody's job. gavel is the party whose job it is.
+  </p>
+
+  <a class="deck" href="deck.html">Open the 10-slide deck &rarr;</a>
+
+  <h2>The two acts</h2>
+  <div class="split">
+    <div class="act done">
+      <h3>Signing</h3>
+      <p>Off-chain, in the Safe Transaction Service. Free. The owners already did it — that is why the transaction is in the queue at all.</p>
+      <span class="tag">● Already happened</span>
+    </div>
+    <div class="vs">then</div>
+    <div class="act undone">
+      <h3>Executing</h3>
+      <p>On-chain <code>execTransaction</code>. Costs gas. Permissionless — <b style="color:var(--hi)">anyone</b> may call it. Assigned to no one, so it does not happen.</p>
+      <span class="tag">▲ Nobody's job</span>
+    </div>
+  </div>
+
+  <h2>The finding this is built on</h2>
+  <div class="card">
+    <p class="pct"><em>92.6%</em> already dead</p>
+    <p style="margin:10px 0 20px;color:var(--mid);font-size:15px">
+      Every square is one queued Base transaction that passes the naive
+      &ldquo;threshold met, not executed&rdquo; test.
+    </p>
+    <div class="grid" id="g" aria-hidden="true"></div>
+    <div class="key">
+      <span><b style="background:var(--dead);filter:brightness(1.5)"></b>339 dead — nonce consumed</span>
+      <span><b style="background:var(--amber)"></b>21 live, behind the nonce</span>
+      <span><b style="background:#FFD37A"></b>4 at nonce, do not simulate</span>
+      <span><b style="background:var(--green)"></b>2 simulate SUCCESS</span>
+    </div>
+    <p style="margin:14px 0 0;font-size:13px;color:var(--low);font-family:var(--mono)">
+      Squares partition the 366; the funnel below nests them. 21 + 4 + 2 = the 27 live,
+      and 4 + 2 = the 6 at their Safe's current nonce.
+    </p>
+    <div class="funnel" style="margin-top:22px;border-top:1px solid var(--line);padding-top:16px">
+      <div><b>1,299</b><span>Base Safes surveyed, across all of Base history</span></div>
+      <div><b>366</b><span>queued transactions match the naive &ldquo;ready to execute&rdquo; test</span></div>
+      <div class="d"><b>339</b><span>nonce already consumed — permanently dead (92.6%)</span></div>
+      <div><b>27</b><span>still live</span></div>
+      <div><b>6</b><span>at their Safe's current nonce</span></div>
+      <div class="l"><b>2</b><span>simulate SUCCESS</span></div>
+    </div>
+  </div>
+  <p>
+    A detector built on the obvious definition is <b style="color:var(--hi)">~93% false positives</b>.
+    Anyone can concatenate signatures; knowing which 7.4% are real is the product. Method and
+    per-Safe detail are in the <a href="https://github.com/edycutjong/gavel">repository README</a>.
+  </p>
+
+  <h2>Verify it yourself — five surfaces, none of them ours</h2>
+  <ol>
+    <li>
+      <a href="https://sepolia.etherscan.io/tx/0xf0b3b61144dc272ce39508056d600f28bbb7b92de1b2e30c4dc4da856ea4cc68">Open the transaction</a>
+      <span class="expect">Status <em>Success</em> · 144,637 gas · block 11618878</span>
+    </li>
+    <li>
+      On that page open <b style="color:var(--hi)">Logs</b>
+      <span class="expect">A Safe <em>ExecutionSuccess</em> and a USDC <em>Transfer</em> of 10.000000 — value moved</span>
+    </li>
+    <li>
+      <a href="https://sepolia.etherscan.io/address/0xB8709787228046C4612D969A153942e1693e6169#readContract">Read the Safe's contract</a> → <code>isOwner</code> →
+      <code>0x5E2e5Fd3aD7fDC9B94482930db8b5F45E439bab7</code>
+      <span class="expect">Returns <em>false</em>. The executor owns nothing on the Safe it drained.</span>
+    </li>
+    <li>
+      Same contract → <code>nonce</code>
+      <span class="expect">Advanced past the transaction we executed — it is genuinely consumed, not merely proposed</span>
+    </li>
+    <li>
+      <a href="https://github.com/edycutjong/gavel">Read the code</a> — <code>src/assemble.mjs</code> is the entire decision surface
+      <span class="expect"><code>npm test</code> · 64 tests, one of which runs against a committed real Safe Transaction Service response</span>
+    </li>
+  </ol>
+
+  <div class="warn">
+    <b>The sender will look wrong, and here is why before you wonder.</b><br>
+    KeeperHub writes are gas-sponsored, so a relayer submits and the top-level <code>From</code> is an
+    address you will not recognise. But <code>eth_getCode</code> on our executor returns
+    <code>0xef0100…</code> — an <b>EIP-7702 delegation designator</b>. The delegate runs in the EOA's own
+    context, so <code>msg.sender</code> at the Safe is still the executor. Verify by transaction hash,
+    not by address history.
+  </div>
+
+  <h2>What is not done</h2>
+  <div class="card" style="font-size:15px">
+    <p style="margin:0 0 10px"><b style="color:var(--hi)">No mainnet execution yet.</b> Everything above is
+    Ethereum Sepolia. <code>EVIDENCE.md</code> is absent by design, not empty by accident —
+    <code>scripts/audit.mjs</code> refuses to write a row from a chain marked
+    <code>receiptsEligible: false</code>.</p>
+    <p style="margin:0 0 10px"><b style="color:var(--hi)">The workflow is not deployed.</b>
+    <code>code/run-code</code> and <code>HTTP Request</code> require a paid KeeperHub plan.
+    <code>scripts/drain.mjs</code> reaches the same on-chain outcome through the Direct Execution API,
+    which is not gated — but it decides here and asks KeeperHub to execute, rather than deciding
+    inside KeeperHub. That is a weaker answer and we are not going to blur it.</p>
+    <p style="margin:0"><b style="color:var(--hi)">No demo video, no Hub publication, no Marketplace
+    listing</b> as of this page's last update.</p>
+  </div>
+
+  <footer>
+    gavel · MIT · built for the KeeperHub Agent Economy hackathon<br>
+    This page is one static file. It makes no network request, stores nothing, and asserts nothing on
+    its own authority — every number above links to a surface we do not operate.
+  </footer>
+
+</div>
+<script>
+  /* Draws 366 squares from the counts printed beside them. No data is fetched,
+     derived or stored; if this never runs, every number above is still on the
+     page in the funnel. Order is fixed, not random — a reload shows the same
+     picture, because it is a census and not an animation. */
+  (function () {
+    var g = document.getElementById('g');
+    if (!g) return;
+    var BUCKETS = [[339, ''], [21, 'live'], [4, 'nonce'], [2, 'ok']];
+    var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    var n = 0, frag = document.createDocumentFragment();
+    BUCKETS.forEach(function (b) {
+      for (var i = 0; i < b[0]; i++) {
+        var el = document.createElement('i');
+        if (b[1]) el.className = b[1];
+        el.style.animationDelay = reduce ? '0ms' : Math.min(n * 3, 1400) + 'ms';
+        frag.appendChild(el); n++;
+      }
+    });
+    g.appendChild(frag);
+  })();
+</script>
+</body>
+</html>

@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>gavel — the deck</title>
+<meta name="description" content="gavel: executes Safe multisig transactions that reached threshold but were never executed. Ten slides.">
+<meta name="theme-color" content="#0A0D12">
+<meta name="color-scheme" content="dark">
+<meta property="og:title" content="gavel — the deck">
+<meta property="og:description" content="366 queued Safe transactions looked ready. 92.6% were already dead. Ten slides on the 7.4% that are real.">
+<meta property="og:image" content="https://edycutjong.github.io/gavel/assets/og-image.png">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+<link rel="icon" href="assets/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+<link rel="manifest" href="site.webmanifest">
+<style>
+  :root{
+    --bg:#0A0D12; --surface:#12161C; --inset:#0E1116;
+    --line:#1F2733; --line-strong:#2A3441;
+    --hi:#E6EDF5; --body:#B9C4D0; --mid:#8A97A8; --low:#5C6874;
+    --amber:#FFB020; --green:#3FD98B; --dead:#39424E; --red:#FF6B6B;
+    --mono:ui-monospace,"JetBrains Mono",SFMono-Regular,Menlo,monospace;
+    --ui:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;background:var(--bg);color:var(--body);
+    font-family:var(--ui);-webkit-font-smoothing:antialiased;
+  }
+  /* One slide per viewport, scroll-snapped. Works as a deck on a projector and
+     as a scrollable page on a phone, without two implementations. */
+  main{scroll-snap-type:y mandatory;overflow-y:auto;height:100dvh;scroll-behavior:smooth}
+  section{
+    scroll-snap-align:start;min-height:100dvh;display:grid;place-items:center;
+    padding:80px 28px;position:relative;border-bottom:1px solid var(--line);
+  }
+  /* min-width:0 is load-bearing: `section` is a grid, and a grid item defaults
+     to min-width:auto, which refuses to shrink below its content. Without it
+     the preformatted receipt in slide 06 widens this box past the viewport and
+     its own overflow-x:auto never gets the chance to scroll. */
+  .inner{max-width:940px;width:100%;min-width:0}
+  .n{position:absolute;top:26px;left:28px;font-family:var(--mono);font-size:12px;
+     letter-spacing:.12em;color:var(--low)}
+  .kicker{font-family:var(--mono);font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;
+     color:var(--amber);margin:0 0 18px}
+  h1{font-size:clamp(40px,8vw,84px);line-height:.98;margin:0;color:var(--hi);letter-spacing:-.035em}
+  h2{font-size:clamp(28px,5vw,52px);line-height:1.08;margin:0 0 22px;color:var(--hi);letter-spacing:-.028em}
+  p{font-size:clamp(16px,2.1vw,20px);line-height:1.55;margin:0 0 16px;max-width:66ch;color:var(--body)}
+  .big{font-size:clamp(56px,15vw,150px);line-height:.9;color:var(--hi);letter-spacing:-.05em;
+       font-variant-numeric:tabular-nums;margin:0}
+  .big em{font-style:normal;color:var(--dead);filter:brightness(1.6)}
+  strong{color:var(--hi);font-weight:600}
+  code{font-family:var(--mono);font-size:.9em;color:var(--amber);overflow-wrap:anywhere}
+  .sub{color:var(--mid);font-size:clamp(15px,1.9vw,18px)}
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px;margin-top:26px}
+  .c{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:20px 22px}
+  .c h3{margin:0 0 8px;font-size:16px;color:var(--hi)}
+  .c p{font-size:14.5px;margin:0;color:var(--mid)}
+  .c .tag{display:block;font-family:var(--mono);font-size:11px;letter-spacing:.1em;
+     text-transform:uppercase;margin-top:12px}
+  .ok .tag{color:var(--green)} .no .tag{color:var(--amber)}
+  ul{margin:0;padding:0;list-style:none}
+  li{padding:13px 0;border-bottom:1px solid var(--line);font-size:clamp(15px,2vw,18px);
+     display:flex;gap:14px;align-items:baseline}
+  li:last-child{border-bottom:0}
+  li .m{font-family:var(--mono);font-size:13px;color:var(--amber);min-width:96px;flex-shrink:0}
+  .grid{display:flex;flex-wrap:wrap;gap:3px;margin:24px 0 18px;max-width:760px}
+  .grid i{width:11px;height:11px;border-radius:2px;background:var(--dead)}
+  .grid i.live{background:var(--amber)} .grid i.nonce{background:#FFD37A}
+  .grid i.ok{background:var(--green);box-shadow:0 0 7px rgba(63,217,139,.85)}
+  .key{display:flex;flex-wrap:wrap;gap:16px;font-family:var(--mono);font-size:12.5px;color:var(--mid)}
+  .key span{display:inline-flex;align-items:center;gap:7px}
+  .key b{width:10px;height:10px;border-radius:2px;display:inline-block}
+  .rec{font-family:var(--mono);font-size:clamp(11.5px,1.6vw,14px);background:var(--inset);
+     border:1px solid var(--line);border-radius:12px;padding:20px 22px;overflow-x:auto;
+     white-space:pre;color:var(--body);line-height:1.7;max-width:100%}
+  .rec b{color:var(--green);font-weight:400}
+  .flow{display:flex;flex-wrap:wrap;align-items:center;gap:10px;font-family:var(--mono);
+     font-size:13px;margin-top:8px}
+  .flow span{background:var(--surface);border:1px solid var(--line-strong);border-radius:9px;
+     padding:9px 13px;color:var(--body)}
+  .flow span.hl{border-color:var(--amber);color:var(--amber)}
+  .flow i{color:var(--low);font-style:normal}
+  a{color:var(--amber);text-decoration:none;border-bottom:1px solid rgba(255,176,32,.35)}
+  a:focus-visible{outline:2px solid var(--amber);outline-offset:3px}
+  .nav{position:fixed;right:20px;top:50%;transform:translateY(-50%);display:flex;
+     flex-direction:column;gap:9px;z-index:10}
+  .nav a{width:9px;height:9px;border-radius:50%;background:var(--line-strong);border:0;
+     display:block;transition:background .2s,transform .2s}
+  .nav a:hover{background:var(--mid);transform:scale(1.3)}
+  .nav a.on{background:var(--amber)}
+  .hint{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);font-family:var(--mono);
+     font-size:11.5px;letter-spacing:.1em;color:var(--low);z-index:10;pointer-events:none}
+  .end{display:inline-flex;gap:10px;align-items:center;font-family:var(--mono);font-size:13.5px;
+     color:var(--bg);background:var(--amber);padding:12px 20px;border-radius:10px;
+     border-bottom:0;font-weight:600;margin-top:8px}
+  @media(max-width:640px){
+    .nav{display:none} .hint{display:none}
+    section{padding:64px 20px;min-height:auto;scroll-snap-align:none}
+    main{scroll-snap-type:none;height:auto;overflow:visible}
+    .grid i{width:8px;height:8px}
+  }
+  @media(prefers-reduced-motion:reduce){main{scroll-behavior:auto}*{transition:none!important}}
+  @media print{
+    .nav,.hint{display:none} main{height:auto;overflow:visible}
+    section{page-break-after:always;min-height:auto;border:0}
+  }
+</style>
+</head>
+<body>
+<nav class="nav" aria-label="Slides">
+  <a href="#s1" class="on" aria-label="Slide 1"></a><a href="#s2" aria-label="Slide 2"></a>
+  <a href="#s3" aria-label="Slide 3"></a><a href="#s4" aria-label="Slide 4"></a>
+  <a href="#s5" aria-label="Slide 5"></a><a href="#s6" aria-label="Slide 6"></a>
+  <a href="#s7" aria-label="Slide 7"></a><a href="#s8" aria-label="Slide 8"></a>
+  <a href="#s9" aria-label="Slide 9"></a><a href="#s10" aria-label="Slide 10"></a>
+</nav>
+<div class="hint">↓ / SPACE to advance</div>
+
+<main>
+
+<section id="s1"><span class="n">01</span><div class="inner">
+  <img src="assets/icon.svg" alt="" width="76" height="76" style="margin-bottom:26px">
+  <h1>gavel</h1>
+  <p style="font-size:clamp(19px,3vw,28px);margin-top:22px;color:var(--body);max-width:60ch">
+    Executes Safe multisig transactions that already reached their signature
+    threshold — from a wallet that <strong>owns nothing</strong> on the Safe.
+  </p>
+  <p class="sub" style="margin-top:24px">KeeperHub · Safe · Base 8453 · MIT</p>
+</div></section>
+
+<section id="s2"><span class="n">02</span><div class="inner">
+  <p class="kicker">The problem</p>
+  <h2>Signing and executing are not the same act</h2>
+  <div class="cards">
+    <div class="c ok">
+      <h3>Signing</h3>
+      <p>Off-chain, in the Safe Transaction Service. Free. The owners already did it — that is why the transaction sits in a queue at all.</p>
+      <span class="tag">● Already happened</span>
+    </div>
+    <div class="c no">
+      <h3>Executing</h3>
+      <p>On-chain <code>execTransaction</code>. Costs gas. Permissionless — <strong>anyone</strong> may call it. Assigned to nobody, so it does not happen.</p>
+      <span class="tag">▲ Nobody's job</span>
+    </div>
+  </div>
+  <p style="margin-top:26px">A payout everyone approved sits unexecuted because the last step
+  belongs to no one. <strong>gavel is the party whose job it is.</strong></p>
+</div></section>
+
+<section id="s3"><span class="n">03</span><div class="inner">
+  <p class="kicker">What we measured first</p>
+  <p class="big"><em>92.6%</em></p>
+  <h2 style="margin-top:20px">of the obvious answer is wrong</h2>
+  <p>We surveyed <strong>1,299 Base Safes</strong> across all of Base history.
+  <strong>366</strong> queued transactions passed the naive test — threshold met, not executed.
+  <strong>339 of them were already dead.</strong></p>
+  <p class="sub">The nonce had moved on. They can never execute, by anyone, ever.</p>
+</div></section>
+
+<section id="s4"><span class="n">04</span><div class="inner">
+  <p class="kicker">The census</p>
+  <h2>366 transactions, one square each</h2>
+  <div class="grid" id="g" aria-hidden="true"></div>
+  <div class="key">
+    <span><b style="background:var(--dead);filter:brightness(1.5)"></b>339 dead — nonce consumed</span>
+    <span><b style="background:var(--amber)"></b>21 live, behind the nonce</span>
+    <span><b style="background:#FFD37A"></b>4 at nonce, do not simulate</span>
+    <span><b style="background:var(--green)"></b>2 simulate SUCCESS</span>
+  </div>
+  <p style="margin-top:24px">Anyone can concatenate signatures.
+  <strong>Knowing which 7.4% are real is the product.</strong></p>
+</div></section>
+
+<section id="s5"><span class="n">05</span><div class="inner">
+  <p class="kicker">What it does</p>
+  <h2>Read the queue. Prove it is live. Execute.</h2>
+  <div class="flow">
+    <span>Safe queue</span><i>→</i>
+    <span>threshold · owners · nonce</span><i>→</i>
+    <span class="hl">assemble the signature blob</span><i>→</i>
+    <span>simulate</span><i>→</i>
+    <span class="hl">execTransaction</span>
+  </div>
+  <p style="margin-top:26px">The signature blob is the one piece nothing on the platform does for you:
+  sort confirmations by <strong>ascending owner address</strong>, concatenate 65 bytes each, then run
+  seven pre-broadcast guards. <code>src/assemble.mjs</code> is the entire decision surface —
+  about 40 lines, pure, zero I/O.</p>
+  <p class="sub">Three gates before anything broadcasts: assemble, a local <code>eth_call</code>,
+  then KeeperHub's own simulate. It stops at the first failure.</p>
+</div></section>
+
+<section id="s6"><span class="n">06</span><div class="inner">
+  <p class="kicker">Proof — one real execution</p>
+  <div class="rec">executionId    qy3vfai4lux3yokk7ilea
+transaction    0xf0b3b61144dc272ce39508056d600f28bbb7b92de1b2e30c4dc4da856ea4cc68
+status         <b>success</b>
+block          11618878
+gas used       144,637
+moved          <b>10.000000 USDC</b>
+executor       0x5E2e5Fd3aD7fDC9B94482930db8b5F45E439bab7
+isOwner        <b>false</b>   ← owns nothing on the Safe it drained</div>
+  <p style="margin-top:22px">Ethereum Sepolia. Every field re-read from the chain, not copied from a log.</p>
+</div></section>
+
+<section id="s7"><span class="n">07</span><div class="inner">
+  <p class="kicker">Verify it yourself</p>
+  <h2>Five surfaces, none of them ours</h2>
+  <ul>
+    <li><span class="m">Etherscan</span><span>The transaction: <code>Success</code>, 144,637 gas, block 11618878</span></li>
+    <li><span class="m">Logs</span><span>Safe <code>ExecutionSuccess</code> + USDC <code>Transfer</code> — value moved</span></li>
+    <li><span class="m">readContract</span><span><code>isOwner(executor)</code> returns <strong>false</strong></span></li>
+    <li><span class="m">readContract</span><span><code>nonce</code> advanced past it — consumed, not merely proposed</span></li>
+    <li><span class="m">GitHub</span><span><code>npm test</code> — 64 tests, one against a committed real Transaction Service response</span></li>
+  </ul>
+  <p class="sub" style="margin-top:22px">We assert nothing on our own authority.</p>
+</div></section>
+
+<section id="s8"><span class="n">08</span><div class="inner">
+  <p class="kicker">Why only KeeperHub</p>
+  <h2>The platform is the engine, not the wrapper</h2>
+  <ul>
+    <li><span class="m">safe/</span><span><code>get-pending-transactions</code> — the credentialed queue read. Without it there is no product</span></li>
+    <li><span class="m">safe/</span><span><code>get-threshold</code>, <code>get-owners</code>, <code>get-nonce</code> — the liveness proof</span></li>
+    <li><span class="m">web3/</span><span><code>write-contract</code> — <code>execTransaction</code> from a wallet that owns nothing</span></li>
+    <li><span class="m">code/</span><span><code>run-code</code> — the sandbox the decision runs in</span></li>
+  </ul>
+  <p style="margin-top:24px">Built alone, that is a Transaction Service client with its own JWT rotation,
+  a relayer with nonce management and retry, and a sandboxed execution host you operate.</p>
+</div></section>
+
+<section id="s9"><span class="n">09</span><div class="inner">
+  <p class="kicker">What is not done</p>
+  <h2>Stated plainly, because you will check</h2>
+  <ul>
+    <li><span class="m">mainnet</span><span><strong>No mainnet execution yet.</strong> Everything above is Sepolia. <code>EVIDENCE.md</code> is absent by design — <code>audit.mjs</code> refuses rows from a chain marked <code>receiptsEligible: false</code></span></li>
+    <li><span class="m">workflow</span><span><strong>Not deployed on the canvas.</strong> <code>code/run-code</code> and <code>HTTP Request</code> need a paid plan. <code>drain.mjs</code> reaches the same outcome via the ungated Direct Execution API — but decides here, not inside KeeperHub. A weaker answer, and we will not blur it</span></li>
+    <li><span class="m">surfaces</span><span>No demo video, no Hub publication, no Marketplace listing yet</span></li>
+  </ul>
+  <p class="sub" style="margin-top:22px">A candid answer here has never hurt a submission.</p>
+</div></section>
+
+<section id="s10"><span class="n">10</span><div class="inner">
+  <h2 style="font-size:clamp(30px,6vw,60px)">Anyone can concatenate signatures.<br>
+  <span style="color:var(--amber)">Knowing which ones are real is the product.</span></h2>
+  <p style="margin-top:26px">1,299 Safes surveyed · 366 candidates · 339 dead · <strong>2 genuinely executable</strong></p>
+  <p style="margin-top:26px">
+    <a class="end" href="https://github.com/edycutjong/gavel">Read the code &rarr;</a>
+  </p>
+  <p class="sub" style="margin-top:34px">gavel · MIT · KeeperHub Agent Economy hackathon</p>
+</div></section>
+
+</main>
+<script>
+  /* Census squares, from the counts printed beside them. 339+21+4+2 = 366. */
+  (function () {
+    var g = document.getElementById('g');
+    if (g) {
+      var B = [[339, ''], [21, 'live'], [4, 'nonce'], [2, 'ok']], f = document.createDocumentFragment();
+      B.forEach(function (b) {
+        for (var i = 0; i < b[0]; i++) {
+          var el = document.createElement('i');
+          if (b[1]) el.className = b[1];
+          f.appendChild(el);
+        }
+      });
+      g.appendChild(f);
+    }
+    /* Keyboard paging + dot highlight. Progressive enhancement only: with no JS
+       the deck is still ten anchored sections you can scroll. */
+    var secs = [].slice.call(document.querySelectorAll('section'));
+    var dots = [].slice.call(document.querySelectorAll('.nav a'));
+    var main = document.querySelector('main');
+    var cur = 0;
+    function go(i) {
+      cur = Math.max(0, Math.min(secs.length - 1, i));
+      secs[cur].scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+    document.addEventListener('keydown', function (e) {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      var k = e.key;
+      if (k === 'ArrowDown' || k === 'ArrowRight' || k === 'PageDown' || k === ' ') { e.preventDefault(); go(cur + 1); }
+      else if (k === 'ArrowUp' || k === 'ArrowLeft' || k === 'PageUp') { e.preventDefault(); go(cur - 1); }
+      else if (k === 'Home') { e.preventDefault(); go(0); }
+      else if (k === 'End') { e.preventDefault(); go(secs.length - 1); }
+    });
+    if ('IntersectionObserver' in window) {
+      var io = new IntersectionObserver(function (es) {
+        es.forEach(function (en) {
+          if (!en.isIntersecting) return;
+          var i = secs.indexOf(en.target);
+          if (i < 0) return;
+          cur = i;
+          dots.forEach(function (d, j) { d.classList.toggle('on', j === i); });
+        });
+      }, { root: main, threshold: 0.55 });
+      secs.forEach(function (s) { io.observe(s); });
+    }
+  })();
+</script>
+</body>
+</html>
