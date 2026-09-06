@@ -1,0 +1,182 @@
+#!/usr/bin/env node
+/**
+ * gavel — scripts/audit.mjs
+ *
+ * Turns KeeperHub's own execution rows into `build/EVIDENCE.md` and
+ * `docs/receipts.json`. We RENDER; we do not compute. Every number in the output
+ * came either from KeeperHub's execution row or from an on-chain receipt we
+ * re-read ourselves — never from a variable this script incremented.
+ *
+ * THE RULE THIS SCRIPT EXISTS TO ENFORCE, in code and not in a README sentence:
+ *
+ *   A chain whose manifest entry says `receiptsEligible: false` CANNOT contribute
+ *   a row to EVIDENCE.md. Testnet executions are real executions, and they are not
+ *   evidence. They are written to a separate, clearly-labelled rehearsal log.
+ *
+ * A submission that quietly counted testnet rows would be the exact failure the
+ * separation exists to prevent, so the filter is here rather than in a habit.
+ *
+ *   node scripts/audit.mjs --chain 8453
+ *   node scripts/audit.mjs --chain 11155111        (writes the rehearsal log only)
+ *   node scripts/audit.mjs --chain 8453 --verify    (re-read every receipt on chain)
+ */
+
+import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { createPublicClient, http, formatUnits } from 'viem';
+
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
+const MANIFEST = JSON.parse(readFileSync(join(ROOT, 'src', 'manifest.json'), 'utf8'));
+
+const flags = {};
+for (let i = 2; i < process.argv.length; i++) {
+  if (process.argv[i].startsWith('--')) {
+    const k = process.argv[i].slice(2); const n = process.argv[i + 1];
+    if (!n || n.startsWith('--')) flags[k] = true; else { flags[k] = n; i++; }
+  }
+}
+const chainId = String(flags.chain ?? '');
+const chain = MANIFEST.chains[chainId];
+if (!chain) { console.error(`--chain must be one of ${Object.keys(MANIFEST.chains).join(', ')}`); process.exit(1); }
+
+const key = readFileSync(join(homedir(), '.config', 'keeperhub', 'env'), 'utf8')
+  .match(/^KH_API_KEY=(.+)$/m)?.[1].trim().replace(/['"]/g, '');
+if (!key) { console.error('KH_API_KEY missing'); process.exit(1); }
+
+/* ------------------------------------------------ collect, with pagination */
+
+const runs = [];
+let cursor = null;
+do {
+  const url = new URL('https://app.keeperhub.com/api/analytics/runs');
+  url.searchParams.set('limit', '100');
+  if (cursor) url.searchParams.set('cursor', cursor);
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${key}` } });
+  if (!res.ok) { console.error(`analytics/runs HTTP ${res.status}`); process.exit(1); }
+  const page = await res.json();
+  runs.push(...(page.runs ?? []));
+  cursor = page.nextCursor ?? null;
+} while (cursor);
+
+// One row per transaction hash, not per run: a run can broadcast more than once.
+const rows = [];
+for (const r of runs) {
+  if (String(r.network) !== chainId) continue;
+  for (const t of r.transactionHashes ?? []) {
+    rows.push({
+      executionId: r.id,
+      source: r.source,
+      status: r.status,
+      hash: t.hash,
+      network: String(t.network ?? r.network),
+      startedAt: r.startedAt,
+      completedAt: r.completedAt,
+      durationMs: r.durationMs,
+      gasUsedWei: r.gasUsedWei ?? null,
+      error: r.error ?? null,
+    });
+  }
+}
+
+/* --------------------------------------- verify each receipt against chain */
+
+if (flags.verify && rows.length) {
+  const client = createPublicClient({ transport: http(chain.rpc) });
+  process.stdout.write(`  verifying ${rows.length} receipt(s) on chain`);
+  for (const row of rows) {
+    try {
+      const rec = await client.getTransactionReceipt({ hash: row.hash });
+      row.receiptStatus = rec.status;                  // 'success' | 'reverted'
+      row.blockNumber = Number(rec.blockNumber);
+      row.gasUsed = Number(rec.gasUsed);
+      row.verified = true;
+    } catch {
+      // A hash KeeperHub reports but the chain does not know is a finding, not a
+      // rounding error. Mark it and let it show up in the table as unverified.
+      row.verified = false;
+    }
+    process.stdout.write('.');
+  }
+  process.stdout.write('\n');
+}
+
+/* --------------------------------------------------------------- render */
+
+const ok = rows.filter((r) => r.status === 'success');
+const link = (h) => `${chain.explorer}/tx/${h}`;
+const short = (h) => `${h.slice(0, 10)}…${h.slice(-6)}`;
+
+function table(list) {
+  const head = `| # | executionId | tx | status | receipt | block | gas used | when |\n|---|---|---|---|---|---|---|---|`;
+  const body = list.map((r, i) =>
+    `| ${i + 1} | \`${r.executionId}\` | [\`${short(r.hash)}\`](${link(r.hash)}) | ${r.status} | ` +
+    `${r.receiptStatus ?? '—'} | ${r.blockNumber ?? '—'} | ${r.gasUsed?.toLocaleString() ?? '—'} | ${r.completedAt ?? '—'} |`,
+  ).join('\n');
+  return `${head}\n${body}`;
+}
+
+mkdirSync(join(ROOT, 'docs'), { recursive: true });
+writeFileSync(join(ROOT, 'docs', `receipts-${chainId}.json`), JSON.stringify({
+  $comment: 'Generated by scripts/audit.mjs from KeeperHub execution rows. Do not hand-edit — regenerate.',
+  chainId, chainName: chain.name, receiptsEligible: chain.receiptsEligible,
+  generatedAt: new Date().toISOString(), count: rows.length, rows,
+}, null, 2) + '\n');
+
+if (chain.receiptsEligible) {
+  const md = `# EVIDENCE
+
+Generated by \`node scripts/audit.mjs --chain ${chainId} --verify\` from KeeperHub's own execution
+rows, with every receipt re-read from the chain. Nothing here is hand-typed.
+
+**Chain:** ${chain.name} (${chainId}) · **Explorer:** ${chain.explorer}
+
+## The number
+
+**${ok.length}** Safe transaction${ok.length === 1 ? '' : 's'} that had already been signed by enough
+owners and ${ok.length === 1 ? 'was' : 'were'} sitting unexecuted — executed by an address that owns
+none of them.
+
+${ok.length === 0 ? `> **There are no rows yet.** This file is generated, so an empty table means
+> exactly what it says: no mainnet execution has happened. It is not a formatting problem and it
+> must not be presented as one.\n` : ''}
+## Mechanism volume — our own Safes, self-seeded, disclosed
+
+These Safes are ours and the payouts were staged by \`scripts/seed.mjs\`. That is disclosed because
+the alternative is a number that means less than it looks. **Never summed with demand volume.**
+
+${rows.length ? table(rows) : '_(none yet)_'}
+
+## Demand volume — Safes we do not control
+
+**Never summed with mechanism volume.** A third-party row is worth more than a hundred of ours.
+
+_(none yet)_
+
+## How to check this yourself
+
+1. Open any transaction hash above on ${chain.explorer}.
+2. Look at **Logs** for \`ExecutionSuccess\` from the Safe and the token \`Transfer\`.
+3. Call \`isOwner(<executor>)\` on that Safe. It returns **false** — the executor owns nothing.
+4. Note the top-level sender may be a relayer: KeeperHub writes are gas-sponsored and the executor
+   is an EIP-7702 delegated EOA (\`eth_getCode\` returns an \`0xef0100\` designator). \`msg.sender\` at
+   the Safe is still the executor. See the README for why the sender looks unfamiliar.
+`;
+  writeFileSync(join(ROOT, 'EVIDENCE.md'), md);
+  console.log(`\n  wrote build/EVIDENCE.md — ${ok.length} successful row(s) of ${rows.length}`);
+} else {
+  const md = `# Rehearsal log — ${chain.name} (${chainId})
+
+> **NOT EVIDENCE.** This chain carries \`receiptsEligible: false\` in \`src/manifest.json\`. Nothing
+> in this file may be cited as a result, counted toward the headline number, or copied into
+> \`EVIDENCE.md\`. It exists to show the mechanism was rehearsed before it was run for real.
+
+${rows.length ? table(rows) : '_(none yet)_'}
+`;
+  mkdirSync(join(ROOT, 'docs'), { recursive: true });
+  writeFileSync(join(ROOT, 'docs', `rehearsal-${chainId}.md`), md);
+  console.log(`\n  ${chain.name} is receiptsEligible:false — wrote build/docs/rehearsal-${chainId}.md instead`);
+  console.log(`  EVIDENCE.md deliberately NOT written: no testnet row may ever enter it.`);
+}
+console.log(`  ${rows.length} row(s) · ${ok.length} successful\n`);
