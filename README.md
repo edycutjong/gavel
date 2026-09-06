@@ -164,7 +164,7 @@ Also standing up today:
 
 - **12 Safes deployed and funded** on Ethereum Sepolia from one manifest, CREATE2-deterministic —
   thresholds 1-of-2 through 3-of-5, five of them on the opt-in roster.
-- **50 tests, ~0.07 s**, including [`test/live-fixture.test.mjs`](test/live-fixture.test.mjs), which
+- **64 tests, ~0.07 s**, including [`test/live-fixture.test.mjs`](test/live-fixture.test.mjs), which
   runs the untouched `assemble.mjs` over a **committed real Safe Transaction Service response**. Unit
   fixtures prove we are self-consistent; that file proves we match reality, and they are deliberately
   two different files.
@@ -251,7 +251,7 @@ decision surface.
 ```bash
 git clone <this repo> && cd gavel
 npm install
-npm test                       # 50 tests, ~0.07 s, no network, no keys
+npm test                       # 64 tests, ~0.07 s, no network, no keys
 ```
 
 That suite includes `test/live-fixture.test.mjs`, which runs `src/assemble.mjs` over a committed real

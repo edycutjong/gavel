@@ -1,0 +1,22 @@
+name: gitleaks
+
+# The mechanical version of the hard rule "scan history for secrets before any
+# private -> public flip". fetch-depth: 0 is the whole point — the risk is in the
+# past, not in HEAD.
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
