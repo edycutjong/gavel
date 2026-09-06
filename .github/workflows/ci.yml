@@ -79,9 +79,57 @@ jobs:
       - name: Re-derive every published survey figure
         run: python3 survey/rederive.py
 
+  contracts:
+    name: "Stage 1 · Contract tests + 100% coverage"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: stable
+
+      # No forge-std, no lib/, no submodules: the suite declares the four
+      # cheatcodes it uses inline, so `libs = []` in foundry.toml stays true.
+      - name: forge test
+        run: forge test -vv
+
+      # MockUSDC is testnet-only, but it is the token under every rehearsal
+      # drain -- if its transfer is wrong, the inner-call-failed / GS013 fixture
+      # proves the wrong failure. So the bar here is all four metrics at 100%,
+      # enforced rather than eyeballed.
+      - name: forge coverage must be 100% on every metric
+        run: |
+          set -euo pipefail
+          forge coverage --no-match-coverage "test" --report summary | tee coverage.txt
+
+          ROW=$(grep 'contracts/MockUSDC.sol' coverage.txt || true)
+          if [ -z "$ROW" ]; then
+            echo "::error::MockUSDC.sol is absent from the coverage report"
+            exit 1
+          fi
+
+          # Deliberately not `grep | while read`: that runs the loop in a
+          # subshell, so a failure inside it cannot fail the step. Same bug the
+          # Pages workflow calls out; same fix.
+          rc=0
+          for PCT in $(echo "$ROW" | grep -oE '[0-9]+\.[0-9]+%'); do
+            if [ "$PCT" != "100.00%" ]; then echo "::error::coverage below bar: $PCT"; rc=1; fi
+          done
+
+          # Four columns are reported (lines, statements, branches, funcs). If
+          # the table format ever changes, fail rather than silently check three.
+          COUNT=$(echo "$ROW" | grep -oE '[0-9]+\.[0-9]+%' | wc -l | tr -d ' ')
+          if [ "$COUNT" -ne 4 ]; then
+            echo "::error::expected 4 coverage metrics, parsed $COUNT -- report format changed"
+            rc=1
+          fi
+
+          [ "$rc" -eq 0 ] && echo "MockUSDC.sol: 100% lines, statements, branches and funcs"
+          exit $rc
+
   gate:
     name: "Stage 3 · Gate"
-    needs: [quality, purity, security, survey]
+    needs: [quality, purity, security, survey, contracts]
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:

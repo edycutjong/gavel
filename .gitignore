@@ -8,6 +8,8 @@ coverage/
 .DS_Store
 contracts/out/
 cache/
+lcov.info
+coverage.txt
 
 # docs/assets/ is a generated copy — the canonical media lives in the kitchen and is
 # re-synced by sync-assets.sh, so nothing here is authored. Only the four files

@@ -314,6 +314,16 @@ npm test                       # 80 tests, ~0.08 s, no network, no keys
 That suite includes `test/live-fixture.test.mjs`, which runs `src/assemble.mjs` over a committed real
 Transaction Service response — so "the tests pass" is not a claim about fixtures we invented.
 
+The rehearsal token has its own suite, and it also needs nothing installed — no `forge-std`, no
+`lib/`, no submodules, because the four cheatcodes it uses are declared inline:
+
+```bash
+forge test                     # 22 tests + a fuzz run
+forge coverage                 # 100% lines, statements, branches and funcs
+```
+
+CI enforces that 100%, on all four metrics, rather than reporting it.
+
 The remaining commands touch real chains and need real credentials, kept in `~/.config/` and never in
 this tree (`~/.config/gavel/seed.txt` for the cast mnemonic, `~/.config/gavel/safe-api-key`,
 `~/.config/keeperhub/env`):
@@ -360,6 +370,7 @@ refusing correctly is a success, not an error.
 | [`scripts/verify-assemble.mjs`](scripts/verify-assemble.mjs) | The pure function against a live queue; `--write-fixture` turns today's response into a regression test |
 | [`scripts/sync.mjs`](scripts/sync.mjs) | Emits the workflow JSON per chain (Safe plugin reads on 8453, `web3/read-contract` on testnets — see DX-6) |
 | [`scripts/audit.mjs`](scripts/audit.mjs) | Renders KeeperHub execution rows. Renders; never computes |
+| [`contracts/`](contracts/) | `MockUSDC.sol`, the testnet stand-in, and [`contracts/test/`](contracts/test/) — 22 tests at 100% coverage on every metric, dependency-free |
 | [`test/`](test/) | 80 tests: unit fixtures, the live-response regression file, manifest/roster invariants, and the coverage-gap suite ([`COVERAGE.md`](test/COVERAGE.md)) |
 | [`survey/`](survey/) | The 1,299-Safe measurement: collectors, 1.3 MB of raw responses, and `rederive.py`, which asserts all 22 published figures offline |
 | [`DX-REPORT.md`](DX-REPORT.md) | Seven reproducible KeeperHub findings, dated as they were hit |
