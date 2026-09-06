@@ -36,8 +36,13 @@
   :root{
     --bg:#0A0D12; --surface:#12161C; --inset:#0E1116;
     --line:#1F2733; --line-strong:#2A3441;
-    --hi:#E6EDF5; --body:#B9C4D0; --mid:#8A97A8; --low:#6E7D8B;
+    --hi:#E6EDF5; --body:#B9C4D0; --mid:#8A97A8; --low:#728190;
     --amber:#FFB020; --green:#3FD98B; --dead:#39424E;
+    /* --dead is a swatch colour (1.91:1) and must never be text. These two are
+       its text-safe forms: -lg clears 3:1 for >=24px, -txt clears 4.5:1 for body
+       copy on all three surfaces. Do not go back to filter:brightness() -- axe
+       reads the declared colour and cannot see a filter. */
+    --dead-lg:#566375; --dead-txt:#6F8097;
     --mono:ui-monospace,"JetBrains Mono",SFMono-Regular,Menlo,monospace;
     --ui:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
   }
@@ -126,11 +131,11 @@
   .funnel{font-family:var(--mono);font-size:14.5px;margin-top:6px}
   .funnel div{display:flex;gap:14px;padding:5px 0}
   .funnel b{min-width:56px;text-align:right;font-size:19px;color:var(--hi);font-variant-numeric:tabular-nums}
-  .funnel .d b,.funnel .d span{color:var(--dead);filter:brightness(1.9)}  /* 1.5 rendered 3.19:1 — dead, and unreadable with it. 1.9 is 4.63:1. */
+  .funnel .d b,.funnel .d span{color:var(--dead-txt)}  /* 1.5 rendered 3.19:1 — dead, and unreadable with it. 1.9 is 4.63:1. */
   .funnel .l b,.funnel .l span{color:var(--green)}
   .pct{font-size:clamp(46px,11vw,72px);line-height:1;color:var(--hi);letter-spacing:-.04em;
        font-variant-numeric:tabular-nums;margin:0}
-  .pct em{font-style:normal;color:var(--dead);filter:brightness(1.6)}
+  .pct em{font-style:normal;color:var(--dead-lg)}
 
   ol{counter-reset:s;list-style:none;padding:0;margin:0}
   ol li{counter-increment:s;position:relative;padding:16px 0 16px 52px;border-bottom:1px solid var(--line);
@@ -231,7 +236,7 @@
     </p>
     <div class="grid" id="g" aria-hidden="true"></div>
     <div class="key" id="key">
-      <button type="button" data-b="0"><b style="background:var(--dead);filter:brightness(1.5)"></b>339 dead — nonce consumed</button>
+      <button type="button" data-b="0"><b style="background:var(--dead-lg)"></b>339 dead — nonce consumed</button>
       <button type="button" data-b="1"><b style="background:var(--amber)"></b>21 live, behind the nonce</button>
       <button type="button" data-b="2"><b style="background:#FFD37A"></b>4 at nonce, do not simulate</button>
       <button type="button" data-b="3"><b style="background:var(--green)"></b>2 simulate SUCCESS</button>

@@ -23,8 +23,13 @@
   :root{
     --bg:#0A0D12; --surface:#12161C; --inset:#0E1116;
     --line:#1F2733; --line-strong:#2A3441;
-    --hi:#E6EDF5; --body:#B9C4D0; --mid:#8A97A8; --low:#6E7D8B;
-    --amber:#FFB020; --green:#3FD98B; --dead:#39424E; --red:#FF6B6B;
+    --hi:#E6EDF5; --body:#B9C4D0; --mid:#8A97A8; --low:#728190;
+    --amber:#FFB020; --green:#3FD98B; --dead:#39424E;
+    /* --dead is a swatch colour (1.91:1) and must never be text. These two are
+       its text-safe forms: -lg clears 3:1 for >=24px, -txt clears 4.5:1 for body
+       copy on all three surfaces. Do not go back to filter:brightness() -- axe
+       reads the declared colour and cannot see a filter. */
+    --dead-lg:#566375; --dead-txt:#6F8097; --red:#FF6B6B;
     --mono:ui-monospace,"JetBrains Mono",SFMono-Regular,Menlo,monospace;
     --ui:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
   }
@@ -58,7 +63,7 @@
   p{font-size:clamp(16px,2.1vw,20px);line-height:1.55;margin:0 0 16px;max-width:66ch;color:var(--body)}
   .big{font-size:clamp(56px,15vw,150px);line-height:.9;color:var(--hi);letter-spacing:-.05em;
        font-variant-numeric:tabular-nums;margin:0}
-  .big em{font-style:normal;color:var(--dead);filter:brightness(1.6)}
+  .big em{font-style:normal;color:var(--dead-lg)}
   strong{color:var(--hi);font-weight:600}
   code{font-family:var(--mono);font-size:.9em;color:var(--amber);overflow-wrap:anywhere}
   .sub{color:var(--mid);font-size:clamp(15px,1.9vw,18px)}
@@ -173,7 +178,7 @@
   <h2>366 transactions, one square each</h2>
   <div class="grid" id="g" aria-hidden="true"></div>
   <div class="key">
-    <span><b style="background:var(--dead);filter:brightness(1.5)"></b>339 dead — nonce consumed</span>
+    <span><b style="background:var(--dead-lg)"></b>339 dead — nonce consumed</span>
     <span><b style="background:var(--amber)"></b>21 live, behind the nonce</span>
     <span><b style="background:#FFD37A"></b>4 at nonce, do not simulate</span>
     <span><b style="background:var(--green)"></b>2 simulate SUCCESS</span>
