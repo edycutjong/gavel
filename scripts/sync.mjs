@@ -198,7 +198,7 @@ const nodes = [
     safeAddress: SAFE_ADDR, integrationId: safeIntegration,
   }, 500, 0),
 
-  // Δ1 (RATIFIED, complexity.md §4a). Without it every idle sweep runs three
+  // Without this guard every idle sweep runs three
   // on-chain reads and the Code node, then posts "skipped: no work" — ~720 idle
   // messages a day across a 5-Safe roster, and the live feed stops being readable.
   node('gate-0', 'Has Work', 'action', {

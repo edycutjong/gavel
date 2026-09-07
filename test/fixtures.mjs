@@ -3,7 +3,7 @@
  *
  * Owner addresses are the REAL derived cast (m/44'/60'/0'/0/{0..6}) that the
  * mainnet Safes use — see specs/cast.md. The signature BYTES are synthetic:
- * assemble.mjs performs no ecrecover and no hashing (architecture.md §4.2), so
+ * assemble.mjs performs no ecrecover and no hashing, so
  * what it verifies about a signature is its shape, not its provenance. Any test
  * that needs a genuine signature belongs in the on-chain path, not here.
  *

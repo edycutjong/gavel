@@ -44,7 +44,7 @@ test('the service returns raw 65-byte signatures in confirmations[]', () => {
 });
 
 test('signatures carry eth_sign v values, so pass-through is correct', () => {
-  // architecture.md §4.2 refuses to normalise v, on the grounds that Safe's own
+  // assemble.mjs refuses to normalise v, on the grounds that Safe's own
   // clients already write what checkSignatures expects. This asserts that ground.
   // 27/28 = EIP-712, 31/32 = eth_sign. Anything else would mean normalisation is
   // needed after all, and the six-line crypto surface grows.

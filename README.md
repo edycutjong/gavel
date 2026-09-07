@@ -221,6 +221,14 @@ Also standing up today:
 
 - **12 Safes deployed and funded** on Ethereum Sepolia from one manifest, CREATE2-deterministic —
   thresholds 1-of-2 through 3-of-5, five of them on the opt-in roster.
+- **The volume loop recycles, and you should know that when reading any execution count.** Every
+  Safe swept is one we deployed, and the payouts they queue are ours — this is *mechanism* volume,
+  never summed with third-party volume. Value used to flow O1 -> Safe -> PAYEE exactly once, and
+  since the Sepolia faucet grants 20 USDC the cast simply ran dry. `scripts/seed.mjs recycle` now
+  returns drained USDC from PAYEE to O1 so [`scripts/sweep.mjs`](scripts/sweep.mjs) can run
+  `fund -> stage -> drain` again. The same USDC therefore moves many times. Execution counts are
+  counts of *executions*, not of distinct dollars, and the refusal invariant is what the volume is
+  there to test.
 - **80 tests, ~0.08 s**, including [`test/live-fixture.test.mjs`](test/live-fixture.test.mjs), which
   runs the untouched `assemble.mjs` over a **committed real Safe Transaction Service response**. Unit
   fixtures prove we are self-consistent; that file proves we match reality, and they are deliberately

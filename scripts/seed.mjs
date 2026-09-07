@@ -13,12 +13,14 @@
  *   deploy              deploy any Safe in the manifest that is not yet on-chain.
  *   fund                move USDC from O1 into each Safe per the manifest.
  *   stage               propose + sign a payout to threshold, and STOP. Never executes.
+ *   recycle             move drained USDC from PAYEE back to O1, closing the loop.
  *
  * Usage
  *   node scripts/seed.mjs status  --chain 11155111
  *   node scripts/seed.mjs predict --chain 11155111
  *   node scripts/seed.mjs deploy  --chain 11155111 [--only HERO_A,VOL_1] [--yes]
  *   node scripts/seed.mjs fund    --chain 11155111 [--yes]
+ *   node scripts/seed.mjs recycle --chain 11155111 [--amount 5.0] [--yes]
  *
  * Keys never enter this tree. They are parsed out of ~/.config/gavel/seed.txt,
  * which is `cast wallet new-mnemonic` output — a human-readable block, NOT
@@ -286,6 +288,57 @@ async function cmdFund(chain, cast, flags) {
 }
 
 /**
+ * recycle — close the loop.
+ *
+ * Value only ever flowed one way: O1 -> Safe -> PAYEE. The Sepolia faucet gives
+ * 20 USDC and the manifest allocates 17 of it, so once the cast had been drained
+ * once there was nothing left to drain and the volume run stopped at 25 executions
+ * for want of a return path, not for want of gas. Drains are sponsored through
+ * KeeperHub; the only real budget here is the faucet.
+ *
+ * This moves drained USDC from PAYEE back to O1 so `fund` -> `stage` -> drain can
+ * run again. It touches no Safe: a Safe's balance is gavel's to move, and moving it
+ * from here would be the seeder doing the product's job.
+ *
+ * This does NOT change what the volume means. It is still mechanism volume from
+ * Safes we own, disclosed as such, and never summed with third-party volume. The
+ * loop now recycles; say so wherever the seeding is disclosed.
+ */
+async function cmdRecycle(chain, cast, flags) {
+  const from = cast.PAYEE;
+  const to = cast.O1;
+  const client = createPublicClient({ transport: http(chain.rpc) });
+  const wallet = createWalletClient({ account: from.account, transport: http(chain.rpc) });
+  const usdc = getContract({ address: chain.usdc, abi: ERC20_ABI, client });
+
+  const held = await usdc.read.balanceOf([from.address]);
+  const gas = await client.getBalance({ address: from.address });
+
+  console.log(`\n  ${chain.name} (${chain.id}) — recycle PAYEE -> O1`);
+  console.log(`    PAYEE  ${from.address}  ${formatUnits(held, 6)} USDC  ${formatUnits(gas, 18)} ETH`);
+  console.log(`    O1     ${to.address}`);
+
+  if (held === 0n) { console.log(`\n  nothing to recycle — PAYEE holds no USDC.\n`); return; }
+
+  const amount = flags.amount ? parseUnits(String(flags.amount), 6) : held;
+  if (amount > held) die(`asked to recycle ${formatUnits(amount, 6)} USDC but PAYEE holds ${formatUnits(held, 6)}.`);
+  // PAYEE pays its own gas here — this transfer is not sponsored, unlike the drains.
+  if (gas === 0n) die(`PAYEE holds no ETH and must pay gas for this transfer. Fund ${from.address} first.`);
+
+  console.log(`    move   ${formatUnits(amount, 6)} USDC`);
+  if (!flags.yes) { console.log(`\n  Dry run. Re-run with --yes to broadcast.\n`); return; }
+
+  const hash = await wallet.writeContract({
+    address: chain.usdc, abi: ERC20_ABI, functionName: 'transfer',
+    args: [to.address, amount], chain: null,
+  });
+  const receipt = await client.waitForTransactionReceipt({ hash });
+  console.log(`  ${receipt.status === 'success' ? 'OK  ' : 'FAIL'} ${chain.explorer}/tx/${hash}`);
+  const after = await usdc.read.balanceOf([to.address]);
+  console.log(`  O1 now holds ${formatUnits(after, 6)} USDC — ready to fund another cycle.\n`);
+}
+
+/**
  * stage — manufacture the product condition.
  *
  * Builds a USDC payout, has exactly `threshold` owners sign it, proposes it to the
@@ -403,7 +456,7 @@ const { cmd, flags } = parseArgs(process.argv);
 const chain = resolveChain(flags);
 const cast = loadCast();
 
-const COMMANDS = { status: cmdStatus, predict: cmdPredict, deploy: cmdDeploy, fund: cmdFund, stage: cmdStage, roster: cmdRoster };
+const COMMANDS = { status: cmdStatus, predict: cmdPredict, deploy: cmdDeploy, fund: cmdFund, stage: cmdStage, recycle: cmdRecycle, roster: cmdRoster };
 if (!COMMANDS[cmd]) {
   die(`unknown command "${cmd ?? ''}". Expected one of: ${Object.keys(COMMANDS).join(', ')}`);
 }

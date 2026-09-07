@@ -6,7 +6,7 @@
  * and if so produce the ten `execTransaction` arguments ready to splice into a
  * `web3/write-contract` call.
  *
- * CONTRACT (architecture.md §4.1, §4.2)
+ * CONTRACT
  *   - Pure. Zero I/O: no fetch, no await, no network, no clock, no randomness.
  *     `fetch` IS available in the KeeperHub sandbox — not using it is a deliberate
  *     refusal (invariant I10), because a pure function is testable offline against
@@ -18,7 +18,7 @@
  *     derivation. `execTransaction` recomputes the hash itself from the ten args;
  *     the Transaction Service already holds each owner's signature bytes.
  *
- * v-NORMALISATION IS DELIBERATELY NOT IMPLEMENTED (architecture.md §4.2).
+ * v-NORMALISATION IS DELIBERATELY NOT IMPLEMENTED.
  * The Transaction Service stores each signature exactly as the signing client
  * produced it, and Safe's own SDK/UI already writes v = 27/28 (EIP-712) and
  * v = 31/32 (eth_sign) — precisely what `checkSignatures` expects. Pass-through is
@@ -26,7 +26,7 @@
  * blob against one the Safe UI submits for the same queued tx) can change this.
  */
 
-/** The nine named outcomes committed in spec.md §7 / architecture.md §4.1. */
+/** The nine named outcomes. Every non-execution resolves to exactly one of these. */
 export const REFUSALS = Object.freeze([
   'not-next-nonce',
   'below-threshold',
@@ -171,7 +171,7 @@ function refuse(reason, detail, provenance = {}) {
  * @param {string|number} input.onchainNonce      safe/get-nonce
  * @param {string|number} input.onchainThreshold  safe/get-threshold
  * @param {string[]} input.onchainOwners     safe/get-owners
- * @returns {object} the Assembled contract of architecture.md §4.1
+ * @returns {object} the Assembled contract described at the top of this file
  */
 export function assemble(input) {
   const {
@@ -249,7 +249,7 @@ export function assemble(input) {
     );
   }
   if (candidateCount > 1) {
-    // Δ2 "nonce-conflict" is PENDING in complexity.md §4a; until ratified this
+    // A dedicated "nonce-conflict" reason is deliberately not split out yet; until it is, this
     // folds into not-next-nonce and carries candidateCount in detail.
     return refuse(
       'not-next-nonce',
