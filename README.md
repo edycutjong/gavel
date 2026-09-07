@@ -410,6 +410,36 @@ refusing correctly is a success, not an error.
 
 ---
 
+## 🔻 What we got wrong
+
+Corrections we made to our own published claims, dated, each one checkable against the commit
+named. They are here rather than only in `git log` because a retraction nobody can read is not a
+retraction.
+
+| Date | We said | It was actually | Fixed in |
+|---|---|---|---|
+| **2026-09-07** | The README said `rederive.py` asserts **22** published figures | It asserts **24**. A stale count, carried across the README, the project description and a published write-up | [`408ff1b`](../../commit/408ff1b) — and the number is no longer hardcoded in `npm run verify`, so it cannot drift again |
+| **2026-09-06** | Our OG image led with a Safe *"stalled 9d 04h"* | **An invented duration on an invented Safe.** The assets were generated on Aug 26 against a pitch that no longer held, and their hero figures were composites. Every number in them is now measured | [`154694d`](../../commit/154694d) |
+| **2026-09-06** | Eleven invariants, stated as holding | **Three of eleven did not hold as written**, and in the generated workflow none of them were load-bearing. An adversarial review also found a critical injection: `sync.mjs` spliced a webhook-supplied address raw into a JS source string, so a caller could close the literal and hoist their own `assemble()` over the real one, bypassing all eleven guards at once. Every case was a working exploit before it was a test | [`ac621ab`](../../commit/ac621ab) |
+| **2026-09-06** | The test badge said **50 tests** | The suite had **64**. Corrected — then found stale a second time and corrected again | [`414176c`](../../commit/414176c), [`3e795e9`](../../commit/3e795e9) |
+| **2026-09-06** | The demo video's closing card listed **three** honest gaps while its own narration said *"two honest gaps, both on screen"* | The count disagreed with the voiceover, and the third bullet **denied the existence of the video a judge was watching at that moment**. It was also submission status, not an engineering limitation | [`be6383f`](../../commit/be6383f) |
+
+### And the pitch itself
+
+The largest correction is the product's premise. We set out to build a keeper that clears stuck
+Safe transactions, on the assumption that the hard part was cryptographic — reassembling collected
+signatures into the blob `checkSignatures` expects. That part is about 40 lines.
+
+Then we ran the obvious detector against 1,299 Base mainnet Safes, read-only, **before** writing
+the pitch. It matched 366 transactions and **339 of them can never execute**. The detector we were
+about to ship is ~93% false positives, and the condition is *rare* — 5 of 1,298 readable Safes,
+**0.39%** — not the epidemic a launch post would have implied.
+
+So the refusal logic is not defensive polish around the product. It is the product. We would rather
+say that here than have you find it.
+
+---
+
 ## 📄 License
 
 MIT — see [`LICENSE`](LICENSE).
