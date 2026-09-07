@@ -144,13 +144,25 @@ KeeperHub is not a deployment target bolted on at the end — it is the runtime.
 no scheduler and no wallet of its own; every read, every gate and the broadcast itself happen inside
 KeeperHub. Four API surfaces and the Safe plugin carry the whole flow:
 
-| Surface | Where | What it does here |
-|---|---|---|
-| **Safe plugin** (reads) | `queue-1`, `threshold-1`, `owners-1`, `nonce-1` | Pulls the off-chain queue plus the three live on-chain reads the pure function needs. All **7** Safe plugin actions are reads — there is no write action, which is exactly why `exec-1` exists |
-| **`POST /api/execute/contract-call`** | [`scripts/drain.mjs`](scripts/drain.mjs) | Direct Execution. Always `simulate: true` as a preflight, then the real call with an `Idempotency-Key` so a retry can never double-broadcast |
-| **`GET /api/analytics/runs`** | [`scripts/audit.mjs`](scripts/audit.mjs) | KeeperHub's own execution rows — `verified`, `receiptStatus`, `blockNumber`, `gasUsed` — are the audit ledger. We render them; we never compute them |
-| **`GET /api/integrations`** | [`scripts/drain.mjs`](scripts/drain.mjs) | Resolves the executor wallet, and is where **DX-4** (unopt-outable gas sponsorship) was found |
-| **`POST /api/workflows/create`** | [`scripts/sync.mjs`](scripts/sync.mjs) | Emits the `gavel-drain` graph per chain — **11 nodes** (1 trigger + 10 actions), 10 edges, committed at [`workflows/`](workflows/) |
+Every surface below carries a **liveness claim**. "Live" means it ran in the path that produced
+the 50 executions on record. "Authored" means it is committed and was verified during the spikes,
+but the production path does not go through it — and saying so is more useful to you than a longer
+list of yeses.
+
+| Surface | Liveness | Where | What it does |
+|---|---|---|---|
+| **`POST /api/execute/contract-call`** | ✅ **live — all 50 executions** | [`scripts/drain.mjs:164`](scripts/drain.mjs) | Direct Execution. Always `simulate: true` as a preflight, then the real call with an `Idempotency-Key` so a retry can never double-broadcast |
+| **`GET /api/analytics/runs`** | ✅ **live — 50 rows** | [`scripts/audit.mjs:53`](scripts/audit.mjs) | KeeperHub's own execution rows — `verified`, `receiptStatus`, `blockNumber`, `gasUsed` — are the audit ledger. We render them; we never compute them |
+| **MCP server** | ✅ live, design-time | spikes | `get_plugin`, `get_spending_limits`, `list_projects`, `list_integrations`, `GET /api/mcp/schemas`. Every platform claim here was checked against a live MCP call |
+| **`POST /api/workflows/create`** | ⚠️ **called, rejected** | [`scripts/sync.mjs:300`](scripts/sync.mjs) | Emits the `gavel-drain` graph — 11 nodes, 10 edges, committed at [`workflows/`](workflows/). The API returns `upgrade_required`: `code/run-code` and `HTTP Request` are plan-gated (**issue #2279**) |
+| **Safe plugin reads** — `safe/get-pending-transactions`, `-threshold`, `-owners`, `-nonce` | ⚠️ **authored, not in the production path** | `workflows/*.json` nodes `queue-1`, `threshold-1`, `owners-1`, `nonce-1` | They are the canonical design and were verified in the spikes, but the graph holding them was never created. `drain.mjs` instead reads the queue from `api.safe.global` and takes `nonce()`/`getThreshold()`/`getOwners()` with viem straight off the RPC |
+| **`web3/read-contract`** · **`web3/write-contract`** | ⚠️ **authored, not in the production path** | `workflows/*.json` nodes `read-*`, `exec-1` | Same gate. `exec-1` is why the graph exists — all **7** Safe plugin actions are reads, so there is no Safe-plugin write action to execute with |
+
+**So be precise about what "through KeeperHub" means here.** Value moved through KeeperHub 50 times
+and the ledger proving it is KeeperHub's own — that part is real. The *reads* feeding the decision
+do not currently go through KeeperHub in the running path, because the workflow that would carry
+them is plan-gated. The canvas version and `drain.mjs` reach the identical on-chain outcome; they
+differ in where the reads come from and where the decision is made. We are not going to blur that.
 
 The graph is generated, never hand-drawn: `sync.mjs` injects [`src/assemble.mjs`](src/assemble.mjs)
 **verbatim** into the Code node, so the function the tests run offline and the function the canvas
