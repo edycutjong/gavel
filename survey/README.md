@@ -9,7 +9,7 @@ every published figure from them.
 python3 survey/rederive.py
 ```
 
-Offline. No network, no credentials, no dependencies, ~0.2 s. It checks 22 figures against what
+Offline. No network, no credentials, no dependencies, ~0.2 s. It checks 24 figures against what
 `README.md` claims and exits non-zero on the first mismatch.
 
 It exists because the rest of this repo does not ask to be trusted — the tests run against a
@@ -109,7 +109,7 @@ a secret**; every one reads its key from `~/.config/` at runtime, and none can w
 
 | Path | What it is |
 |---|---|
-| `rederive.py` | Re-derives and asserts all 22 published figures. Offline |
+| `rederive.py` | Re-derives and asserts all 24 published figures. Offline |
 | `collect/rpclib.py` | Base RPC helper. Browser UA required |
 | `collect/cs.py` | EIP-55 checksum, verified against `cast to-check-sum-address` |
 | `collect/collect.py` · `collect_active.py` | Windowed `eth_getLogs` for each sample |

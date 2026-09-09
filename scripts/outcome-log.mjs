@@ -62,15 +62,18 @@ export const TAXONOMY = Object.freeze({
   'incomplete-payload':   { n: null, decidedBy: 'assemble', class: 'guard',
     unreachable: 'reachable only through the CANVAS path, where the Safe plugin projection omits five '
       + "of execTransaction's ten arguments; drain.mjs hydrates from the tx service and always has all ten" },
-  // The twelfth. build/README.md documents "nine named outcomes" plus two guards;
-  // src/assemble.mjs also returns `malformed-payload` from nine call sites for
-  // input that is not well-formed at all (a safeAddress that is not 20 bytes, a
-  // non-integer nonce, an empty owner array). It is a real, reachable, distinct
-  // reason and the README does not list it. Recorded here rather than folded into
-  // another bucket, because collapsing it would hide the gap instead of showing it.
+  // The twelfth. src/assemble.mjs returns `malformed-payload` from EIGHT call sites
+  // for input that is not well-formed at all. Three guard the caller's own
+  // arguments (safeAddress, onchainNonce/Threshold, onchainOwners); the other five
+  // guard fields that arrive FROM the Transaction Service (tx.to, tx.gasPrice,
+  // tx.value, tx.safeTxGas, tx.baseGas). Recorded as its own reason rather than
+  // folded into another bucket, because collapsing it would hide the gap.
   'malformed-payload':    { n: null, decidedBy: 'assemble', class: 'guard',
-    unreachable: 'inputs come from the chain and the Safe Transaction Service, both well-formed by '
-      + 'construction; this guards a caller that hands assemble.mjs garbage directly' },
+    unreachable: 'not producible through the Safe Transaction Service, though NOT because it only '
+      + 'guards a caller - five of its eight call sites guard tx.to, tx.gasPrice, tx.value, '
+      + 'tx.safeTxGas and tx.baseGas, which are all Service fields. The Service validates and '
+      + 'normalises those before serving them, so it does not emit a malformed one; a different '
+      + 'queue source could' },
 });
 
 /**
@@ -102,7 +105,7 @@ export function shapeOutcome({
   const opClass = OPERATIONAL[outcome];
   if (!known && !opClass) {
     throw new Error(
-      `outcome-log: "${outcome}" is neither one of the eleven named outcomes nor a known ` +
+      `outcome-log: "${outcome}" is neither one of the twelve named reasons nor a known ` +
       `operational state. Add it to TAXONOMY or OPERATIONAL deliberately — do not let a ` +
       `call site invent one.`,
     );

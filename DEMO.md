@@ -43,7 +43,7 @@ Transaction Service, the real chain, and the real KeeperHub API.
 
 ```bash
 npm install
-npm test            # 64 tests, ~0.07 s, no network, no keys
+npm test            # 87 tests, ~0.08 s, no network, no keys
 ```
 
 The full path, in order. Each step is idempotent and each refuses rather than guesses:

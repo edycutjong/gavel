@@ -20,7 +20,7 @@ const src = (p) => readFileSync(fileURLToPath(new URL(p, import.meta.url)), 'utf
 test('shapeOutcome refuses an outcome nobody declared', () => {
   assert.throws(
     () => shapeOutcome({ at: 'T', chainId: '1', safe: '0xa', outcome: 'vibes', stage: 'assemble' }),
-    /neither one of the eleven named outcomes nor a known operational state/,
+    /neither one of the twelve named reasons nor a known operational state/,
   );
 });
 

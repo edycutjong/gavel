@@ -18,7 +18,7 @@
 
   <br/>
 
-  ![tests](https://img.shields.io/badge/tests-80%20passing%20in%20~0.08s-2ea44f?style=flat)
+  ![tests](https://img.shields.io/badge/tests-87%20passing%20in%20~0.08s-2ea44f?style=flat)
   ![coverage](https://img.shields.io/badge/assemble.mjs-100%25%20line%20%2F%20branch-2ea44f?style=flat)
   ![deps](https://img.shields.io/badge/decision%20surface-zero%20deps%2C%20zero%20I%2FO-blue?style=flat)
   ![node](https://img.shields.io/badge/node-%E2%89%A520-339933?style=flat)
@@ -100,7 +100,7 @@ against real captured bytes and an impure one cannot.
 ## 🏗️ Architecture
 
 <div align="center">
-  <img src="docs/assets/architecture.png" alt="gavel architecture — the Safe Transaction Service queue and three live on-chain reads enter KeeperHub's Safe plugin; src/assemble.mjs decides purely and returns either ten execTransaction arguments or one of seven named refusals; Direct Execution broadcasts from a wallet that owns none of the Safe; KeeperHub's own execution rows are the audit ledger." width="100%">
+  <img src="docs/assets/architecture.png" alt="gavel architecture — the Safe Transaction Service queue and three live on-chain reads enter KeeperHub's Safe plugin; src/assemble.mjs decides purely and returns either ten execTransaction arguments or one of nine named refusals; Direct Execution broadcasts from a wallet that owns none of the Safe; KeeperHub's own execution rows are the audit ledger." width="100%">
 </div>
 
 Four surfaces carry one transaction, and only one of them is ours. The queue and the
@@ -135,7 +135,7 @@ behaviour is "never fires" must still not fall through to execution:
 |---|---|
 | `not-on-roster` | I3, re-checked inside the pure function and not only at the workflow's roster node, because a public Marketplace listing is a caller-open door |
 | `incomplete-payload` | The Safe plugin's projection omits five of `execTransaction`'s ten arguments. When they have not been hydrated we **cannot** evaluate the refund guard — so we refuse rather than assume zero |
-| `malformed-payload` | Input that is not well-formed at all — a `safeAddress` that is not 20 bytes, a non-integer nonce, an empty owner array. Returned from nine call sites in [`src/assemble.mjs`](src/assemble.mjs). It guards a *caller*, not a queued transaction, which is why it sits here and not among the nine |
+| `malformed-payload` | Input that is not well-formed at all — a `safeAddress` that is not 20 bytes, a non-integer nonce, an empty owner array. Returned from eight call sites in [`src/assemble.mjs`](src/assemble.mjs). Five of its eight call sites guard the **queued transaction** (`tx.to`, `tx.gasPrice`, `tx.value`, `tx.safeTxGas`, `tx.baseGas` — all Transaction Service fields); three guard the caller's own inputs. This row said "guards a caller, not a queued transaction" until 2026-09-09, and that wrong reading was the stated reason for its `n/a` above |
 
 ### Which of them have actually *happened*
 
@@ -150,15 +150,15 @@ by [`scripts/outcome-log.mjs`](scripts/outcome-log.mjs). The table is generated,
 | # | outcome | decided by | named in `test/` | observed live | rows |
 |---|---|---|---|---|---|
 | 1 | `not-next-nonce` | assemble | ✅ | ✅ | 5 |
-| 2 | `below-threshold` | assemble | ✅ | ✅ | 2 |
-| 3 | `eip1271-unsupported` | assemble | ✅ | ✅ | 1 |
-| 4 | `refund-requested` | assemble | ✅ | ✅ | 1 |
-| 5 | `delegatecall-refused` | assemble | ✅ | ✅ | 1 |
+| 2 | `below-threshold` | assemble | ✅ | ✅ | 3 |
+| 3 | `eip1271-unsupported` | assemble | ✅ | ✅ | 2 |
+| 4 | `refund-requested` | assemble | ✅ | ✅ | 2 |
+| 5 | `delegatecall-refused` | assemble | ✅ | ✅ | 2 |
 | 6 | `threshold-drift` | assemble | ✅ | **n/a** | 0 |
 | 7 | `owner-removed` | assemble | ✅ | **n/a** | 0 |
 | 8 | `raced-gs026` | chain | ✅ | ✅ | 1 |
-| 9 | `inner-call-failed` | chain | ✅ | ✅ | 1 |
-| — | `not-on-roster` | assemble | ✅ | ✅ | 7 |
+| 9 | `inner-call-failed` | chain | ✅ | ✅ | 3 |
+| — | `not-on-roster` | assemble | ✅ | ✅ | 8 |
 | — | `incomplete-payload` | assemble | ✅ | **n/a** | 0 |
 | — | `malformed-payload` | assemble | ✅ | **n/a** | 0 |
 
@@ -178,7 +178,7 @@ the production data source at all:
 | `threshold-drift` | the Safe Transaction Service reports `confirmationsRequired` as the **live** threshold, never a proposal-time snapshot, so "the queue still believes the old number is enough" is a state it will not serve | `BENCH_GOV`, threshold raised 2→3 after signing; the service reported 3 immediately |
 | `owner-removed` | the service **prunes** confirmations from addresses that are no longer owners — the stale signature never reaches a reader | `BENCH_ROTATE`, `O2` signed, `O2` removed; the service then returned the transaction with `O2` absent |
 | `incomplete-payload` | canvas-only: the Safe plugin projection omits five of the ten arguments. `drain.mjs` hydrates from the tx service and always has all ten | — |
-| `malformed-payload` | guards a caller that hands `assemble.mjs` garbage directly; chain and service inputs are well-formed by construction | — |
+| `malformed-payload` | the Service validates and normalises the fields it serves, so it does not emit a malformed one. **Not** because it only guards a caller — five of its eight call sites guard `tx.*` fields that arrive *from* the Service. A different queue source could reach it | — |
 
 This corrects something this README used to claim. Outcome 7 was described as *"a signature
 collected legitimately last week, from an owner removed yesterday — naive tooling broadcasts it."*
@@ -202,12 +202,12 @@ list of yeses.
 
 | Surface | Liveness | Where | What it does |
 |---|---|---|---|
-| **`POST /api/execute/contract-call`** | ✅ **live — all 150 executions** | [`scripts/drain.mjs:164`](scripts/drain.mjs) | Direct Execution. Always `simulate: true` as a preflight, then the real call with an `Idempotency-Key` so a retry can never double-broadcast |
-| **`GET /api/analytics/runs`** | ✅ **live — 150 rows** | [`scripts/audit.mjs:53`](scripts/audit.mjs) | KeeperHub's own execution rows — `verified`, `receiptStatus`, `blockNumber`, `gasUsed` — are the audit ledger. We render them; we never compute them |
+| **`POST /api/execute/contract-call`** | ✅ **live — all 150 executions** | [`scripts/drain.mjs:210`](scripts/drain.mjs) | Direct Execution. Always `simulate: true` as a preflight, then the real call. **There is no idempotency key** — this README claimed one until 2026-09-09 and the API exposes none. Two identical calls both broadcast, which is exactly what the deliberate race did; one came back `Error(GS026)`. Only the Safe nonce prevents a double-spend |
+| **`GET /api/analytics/runs`** | ✅ **live — 150 rows** | [`scripts/audit.mjs:54`](scripts/audit.mjs) | KeeperHub's own execution rows are the audit ledger: `id`, `source`, `status`, `transactionHashes`, `startedAt`, `completedAt`, `durationMs`, `gasUsedWei`, `error`. Those we render and never compute. `verified` / `receiptStatus` / `blockNumber` / `gasUsed` are **ours**, added only under `--verify` from `getTransactionReceipt` against the RPC — this README credited them to KeeperHub until 2026-09-09 |
 | **MCP server** | ✅ live, design-time | spikes | `get_plugin`, `get_spending_limits`, `list_projects`, `list_integrations`, `GET /api/mcp/schemas`. Every platform claim here was checked against a live MCP call |
 | **`POST /api/workflows/create`** | ⚠️ **called, rejected** | [`scripts/sync.mjs:300`](scripts/sync.mjs) | Emits the `gavel-drain` graph — 11 nodes, 10 edges, committed at [`workflows/`](workflows/). The API returns `upgrade_required`: `code/run-code` and `HTTP Request` are plan-gated (**issue #2279**) |
 | **Safe plugin reads** — `safe/get-pending-transactions`, `-threshold`, `-owners`, `-nonce` | ⚠️ **authored, not in the production path** | `workflows/*.json` nodes `queue-1`, `threshold-1`, `owners-1`, `nonce-1` | They are the canonical design and were verified in the spikes, but the graph holding them was never created. `drain.mjs` instead reads the queue from `api.safe.global` and takes `nonce()`/`getThreshold()`/`getOwners()` with viem straight off the RPC |
-| **`web3/read-contract`** · **`web3/write-contract`** | ⚠️ **authored, not in the production path** | `workflows/*.json` nodes `read-*`, `exec-1` | Same gate. `exec-1` is why the graph exists — all **7** Safe plugin actions are reads, so there is no Safe-plugin write action to execute with |
+| **`web3/read-contract`** · **`web3/write-contract`** | ⚠️ **authored, not in the production path** | `workflows/*.json` node `exec-1` — the `read-*` ids named here until 2026-09-09 do not exist | Same gate. `exec-1` is why the graph exists — all **7** Safe plugin actions are reads, so there is no Safe-plugin write action to execute with |
 
 **So be precise about what "through KeeperHub" means here.** Value moved through KeeperHub 150 times
 and the ledger proving it is KeeperHub's own — that part is real. The *reads* feeding the decision
@@ -244,7 +244,7 @@ refund-free, including the ones that are not.
 
 gavel refuses with `incomplete-payload` instead, and reads the raw Transaction Service alongside the
 plugin to hydrate the five fields. Filed upstream as **DX-1** in
-[`DX-REPORT.md`](DX-REPORT.md) — the strongest of seven findings, with a fix that is a passthrough
+[`DX-REPORT.md`](DX-REPORT.md) — the strongest of eight findings, with a fix that is a passthrough
 rather than a redesign.
 
 ### And a normalisation we deliberately did *not* write
@@ -290,7 +290,7 @@ KeeperHub's own `simulate: true` preflight.
 
 Also standing up:
 
-- **12 Safes deployed and funded** on Ethereum Sepolia from one manifest, CREATE2-deterministic —
+- **12 Safes deployed** on Ethereum Sepolia from one manifest, CREATE2-deterministic, eight of them funded —
   thresholds 1-of-2 through 3-of-5, **nine of them on the opt-in roster**. That was five until
   2026-09-09: the four `BENCH_*` Safes each exist to demonstrate one named refusal, and none of
   them could, because `not-on-roster` is the FIRST check in `assemble.mjs` and a `roster:false`
@@ -377,9 +377,12 @@ batch fails, because the Safe's ETH balance is now 0. The authorisation is real 
 decayed — which is the sharpest possible argument *for* gavel, not against it.
 
 That is also why [`scripts/drain.mjs`](scripts/drain.mjs) will not broadcast without a passing
-read-only simulation: another Safe in the sample, `0xF262c998…6DA8`, has a **guard installed**, and its
-nine fully-signed transactions all revert with `InvalidSignatures()` — rejected by policy, not by
-cryptography. A tool that promises to clear those is advertising drains that can never land.
+read-only simulation: another Safe in the sample, `0xF262c998…6DA8`, has **nine fully-signed
+transactions that have never executed**. Two of them sat at the live nonce and were therefore
+simulated; both reverted. The revert carried **no reason string** — `survey/data/verified.json`
+records `REVERT:execution reverted`, and the other seven were never simulated at all — so "a guard
+rejects these" is the likeliest reading and not a measured one. Until 2026-09-09 this paragraph
+named `InvalidSignatures()`, which appears nowhere in the committed data. A tool that promises to clear those is advertising drains that can never land.
 
 ---
 
@@ -399,7 +402,7 @@ It runs every gate CI runs, in the same order, and prints PASS/FAIL per gate:
 |---|---|
 | Decision surface is pure | `src/assemble.mjs` contains no `import`, `eval`, `fetch`, `Date.now`, `Math.random` or `process.env` — invariant I10 |
 | JS test suite | 87 tests, `node --test` |
-| Published figures re-derive | all 24 README figures, re-derived from 1.3 MB of committed raw responses |
+| Published figures re-derive | all 24 README figures, re-derived from 1.25 MB of committed raw responses |
 | Solidity tests | `forge test` — skipped **loudly** if foundry is absent, never passed quietly |
 
 An optional gate that cannot run reports `SKIP`, not `PASS`. A gate you can't run must never look green.
@@ -417,7 +420,7 @@ The rehearsal token has its own suite, and it also needs nothing installed — n
 `lib/`, no submodules, because the four cheatcodes it uses are declared inline:
 
 ```bash
-forge test                     # 22 tests + a fuzz run
+forge test                     # 22 tests, one of them a fuzz run
 forge coverage                 # 100% lines, statements, branches and funcs
 ```
 
@@ -452,7 +455,7 @@ node scripts/sync.mjs --chain 8453 --safe-integration <id>
 node scripts/audit.mjs --chain 11155111
 ```
 
-`drain.mjs` without `--execute` stops after the three gates, always. A named refusal exits `0` —
+`drain.mjs` without `--execute` stops after the three gates, always. A named refusal exits `3` (assemble-decided) or `1` (`raced-gs026` and `inner-call-failed`, caught after the pure function); exit `0` means the gates passed —
 refusing correctly is a success, not an error.
 
 ---
@@ -464,17 +467,17 @@ refusing correctly is a success, not an error.
 | [`src/assemble.mjs`](src/assemble.mjs) | The entire decision surface. Pure, zero deps, zero I/O. Injected verbatim into the workflow's Code node by `sync.mjs`, so canvas and repo cannot drift |
 | [`src/manifest.json`](src/manifest.json) | The 12-Safe cast + per-chain constants. `receiptsEligible` is load-bearing |
 | [`src/roster.json`](src/roster.json) | The opt-in list. Derived from the manifest by `seed.mjs roster`, never hand-kept |
-| [`scripts/seed.mjs`](scripts/seed.mjs) | `status` · `predict` · `deploy` · `fund` · `stage` · `roster` · `govern`. Stages the conditions. `stage --hostile <variant>` builds a queue shaped to force ONE named refusal; `govern` is the only subcommand that spends gas on something other than a payout — `approve-hash` produces the unverified `v=1` word that outcome 3 refuses, and the two config actions are kept for the record even though the service normalises both outcomes away |
+| [`scripts/seed.mjs`](scripts/seed.mjs) | `status` · `predict` · `deploy` · `fund` · `stage` · `recycle` · `roster` · `govern`. Stages the conditions. `stage --hostile <variant>` builds a queue shaped to force ONE named refusal; `govern` is the only subcommand that spends gas on something other than a payout — `approve-hash` produces the unverified `v=1` word that outcome 3 refuses, and the two config actions are kept for the record even though the service normalises both outcomes away |
 | [`scripts/drain.mjs`](scripts/drain.mjs) | assemble → local `eth_call` → KeeperHub `simulate` → Direct Execution |
 | [`scripts/verify-assemble.mjs`](scripts/verify-assemble.mjs) | The pure function against a live queue; `--write-fixture` turns today's response into a regression test |
-| [`scripts/sync.mjs`](scripts/sync.mjs) | Emits the workflow JSON per chain (Safe plugin reads on 8453, `web3/read-contract` on testnets — see DX-6) |
+| [`scripts/sync.mjs`](scripts/sync.mjs) | Emits the workflow JSON per chain (three of the four Safe plugin reads swap to `web3/read-contract` on testnets; `queue-1` stays `safe/get-pending-transactions` on both, because queue monitoring does support Sepolia — see DX-6) |
 | [`scripts/audit.mjs`](scripts/audit.mjs) | Renders KeeperHub execution rows. Renders; never computes |
 | [`scripts/outcome-log.mjs`](scripts/outcome-log.mjs) | One durable row per terminal state of a drain. KeeperHub's ledger can only ever show successes — outcomes 1-7 are decided before anything is sent — so refusals needed a record of their own |
 | [`scripts/outcomes.mjs`](scripts/outcomes.mjs) | Generates the coverage table above from that log plus `test/`. `--markdown` for the pasteable form |
 | [`scripts/bench.py`](scripts/bench.py) | Reduces those rows to p50/p95 duration and gas cost. Python 3 stdlib, no network — a reducer, never a harness: with no receipts there is no output |
 | [`contracts/`](contracts/) | `MockUSDC.sol`, the testnet stand-in, and [`contracts/test/`](contracts/test/) — 22 tests at 100% coverage on every metric, dependency-free |
 | [`test/`](test/) | 87 tests: unit fixtures, the live-response regression file, manifest/roster invariants, and the coverage-gap suite ([`COVERAGE.md`](test/COVERAGE.md)) |
-| [`survey/`](survey/) | The 1,299-Safe measurement: collectors, 1.3 MB of raw responses, and `rederive.py`, which asserts all 24 published figures offline |
+| [`survey/`](survey/) | The 1,299-Safe measurement: collectors, 1.25 MB of raw responses, and `rederive.py`, which asserts all 24 published figures offline |
 | [`DX-REPORT.md`](DX-REPORT.md) | Eight reproducible KeeperHub findings, dated as they were hit |
 | [`workflows/`](workflows/) | Generated `gavel-drain` graph, 11 nodes (1 trigger + 10 actions), 10 edges |
 | [`docs/rehearsal-11155111.md`](docs/rehearsal-11155111.md) | Rehearsal log. Labelled NOT EVIDENCE |
@@ -487,9 +490,9 @@ refusing correctly is a success, not an error.
 | Not built | Reason |
 |---|---|
 | Any risk score or AI opinion on the payload | The owners already decided. An opinion turns gavel into a gatekeeper, which is the opposite of the product |
-| EIP-1271 contract signatures | ~60 lines of offset arithmetic for a minority case that cannot be demoed without deploying a signer contract. Refused by name: `eip1271-unsupported` |
+| EIP-1271 contract signatures | ~60 lines of offset arithmetic for a minority case. Refused by name: `eip1271-unsupported` — and the refusal **is** demonstrated, without a signer contract: an owner pre-approving a hash on-chain produces the same unverified `v = 1` word, which `seed.mjs govern --action approve-hash` does in one transaction |
 | A dashboard | The demo runs on three surfaces we did not build: app.safe.global, the KeeperHub canvas, the block explorer |
-| A database or second audit ledger | KeeperHub's execution rows already carry `verified`, `receiptStatus`, `blockNumber`, `gasUsed`. A copy is a worse copy |
+| A database, or a copy of KeeperHub's execution rows | Its rows carry `status`, `durationMs` and `gasUsedWei`, and `--verify` adds the chain's own `receiptStatus`, `blockNumber` and `gasUsed`. A copy of that is a worse copy. **`docs/outcomes-*.jsonl` is not that copy** — it records what gavel *decided*, which is a strictly larger set: a refusal never reaches the API, and a failed run carries no transaction hash, so neither can appear in execution rows |
 | A custom contract, staking, or a bond | gavel's claim is that the executor needs no trust. A bond invents the trust relationship the design exists to delete |
 | Private-mempool routing | It **does** exist on KeeperHub write actions. We turn it down: private-mempool writes are not gas-sponsored, and execution outputs carry no public/private route field, so the route could never be evidenced on a receipt |
 | A Safe-plugin *write* action | It does not exist. All **7** Safe plugin actions are reads. Saying so is more useful than implying otherwise |
