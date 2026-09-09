@@ -71,7 +71,8 @@ if (markdown) {
     const s = seen.get(name);
     console.log(
       `| ${meta.n ?? '—'} | \`${name}\` | ${meta.decidedBy} | ` +
-      `${testText.includes(name) ? '✅' : '❌'} | ${s ? '✅' : '❌'} | ${s ? s.n : 0} |`,
+      `${testText.includes(name) ? '✅' : '❌'} | ` +
+      `${meta.unreachable ? '**n/a**' : (s ? '✅' : '❌')} | ${s ? s.n : 0} |`,
     );
   }
 } else {
@@ -83,13 +84,17 @@ if (markdown) {
     const s = seen.get(name);
     console.log(
       `  ${pad(meta.n ?? '-', 3)} ${pad(name, 22)} ${pad(meta.decidedBy, 9)} ` +
-      `${pad(testText.includes(name) ? 'yes' : 'NO', 7)} ${pad(s ? 'yes' : 'no', 9)} ${s ? s.n : 0}`,
+      `${pad(testText.includes(name) ? 'yes' : 'NO', 7)} ` +
+      `${pad(meta.unreachable ? 'n/a' : (s ? 'yes' : 'no'), 9)} ${s ? s.n : 0}`,
     );
   }
-  const observed = order.filter(([n]) => seen.has(n)).length;
-  console.log(`\n  ${observed}/${order.length} outcomes observed in a real run.`);
-  if (observed < order.length) {
-    console.log(`  The rest are asserted by tests only — src/manifest.json dedicates a Safe to each.`);
+  const reachable = order.filter(([, m]) => !m.unreachable);
+  const observed = reachable.filter(([n]) => seen.has(n)).length;
+  console.log(`\n  ${observed}/${reachable.length} REACHABLE outcomes observed in a real run.`);
+  const blocked = order.filter(([, m]) => m.unreachable);
+  if (blocked.length) {
+    console.log(`\n  ${blocked.length} outcome(s) cannot be produced through the production data source.`);
+    console.log(`  The guard stays either way — assemble.mjs is source-agnostic.\n`);
+    for (const [name, m] of blocked) console.log(`    ${name}\n      ${m.unreachable}\n`);
   }
-  console.log();
 }

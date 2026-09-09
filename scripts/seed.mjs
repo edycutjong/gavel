@@ -16,6 +16,8 @@
  *                       --hostile <variant> stages a queue shaped to force ONE named
  *                       refusal instead of the drainable happy path. See HOSTILE below.
  *   recycle             move drained USDC from PAYEE back to O1, closing the loop.
+ *   govern              SPENDS GAS. Executes a Safe config change that invalidates an
+ *                       already-signed payout, producing threshold-drift or owner-removed.
  *
  * Usage
  *   node scripts/seed.mjs status  --chain 11155111
@@ -388,6 +390,16 @@ const HOSTILE = {
     options: { gasPrice: '1' },
     signToThreshold: true,
   },
+  'inner-call-failed': {
+    needs: (safe) => safe.mustStayEmpty || safe.id === 'BENCH_GS013'
+      || 'use BENCH_GS013 — the Safe the manifest keeps deliberately empty for exactly this',
+    describe: 'a payout the Safe cannot cover: execTransaction succeeds, the inner transfer reverts (GS013)',
+    // Costs no gas. drain.mjs gate 2 runs a local eth_call, sees execTransaction
+    // return success=false, and refuses to broadcast -- so the outcome is observed
+    // WITHOUT burning a nonce or paying for a transaction that moves nothing.
+    overpay: true,
+    signToThreshold: true,
+  },
   'delegatecall-refused': {
     needs: () => true,
     describe: 'operation = 1, a DELEGATECALL into someone else\'s treasury (I5)',
@@ -435,8 +447,13 @@ async function cmdStage(chain, cast, flags) {
   // a balance to be a valid test of the refusal. Requiring one would make these
   // scenarios cost money for no reason.
   if (amount === 0n && !hostile) die(`${id} holds no USDC — nothing to stage. Run: fund --chain ${chain.id} --yes`);
-  const payout = amount === 0n ? 1n : amount;
-  if (amount > held) die(`${id} holds ${formatUnits(held, 6)} USDC but ${formatUnits(amount, 6)} was requested.`);
+  // overpay: ask for more than the Safe holds, so the ERC-20 transfer must revert.
+  const payout = hostile?.overpay ? held + parseUnits('1', 6) : (amount === 0n ? 1n : amount);
+  // The overpay variant is the whole point of inner-call-failed: the transfer must
+  // exceed the balance so the inner call reverts. Every other path keeps the guard.
+  if (amount > held && !hostile?.overpay) {
+    die(`${id} holds ${formatUnits(held, 6)} USDC but ${formatUnits(amount, 6)} was requested.`);
+  }
 
   const to = cast.PAYEE.address;
   const data = encodeFunctionData({ abi: ERC20_ABI, functionName: 'transfer', args: [to, payout] });
@@ -510,6 +527,127 @@ async function cmdStage(chain, cast, flags) {
  * other command uses. Hand-editing this file is how a Safe ends up executable that
  * nobody decided to make executable.
  */
+/**
+ * govern — the two outcomes that need the Safe's OWN configuration to change.
+ *
+ * threshold-drift and owner-removed cannot be staged as a queue shape. They are
+ * what happens when a payout is signed legitimately and the Safe then changes
+ * underneath it, so producing them means actually executing a config change
+ * on-chain. This is the only command in the seeder that spends gas on something
+ * other than a payout.
+ *
+ * THE ORDERING IS THE WHOLE TRICK, and getting it wrong yields a different
+ * outcome that looks superficially right:
+ *
+ *   1. Propose the payout at nonce N+1 and sign it to the CURRENT threshold. The
+ *      Safe Transaction Service stamps confirmationsRequired at proposal time, so
+ *      this transaction permanently remembers that 2 signatures were once enough.
+ *   2. Propose the config change at nonce N, sign it, and EXECUTE it. The nonce
+ *      advances to N+1 and the payout from step 1 becomes the live one.
+ *   3. drain.mjs now reads a queue that believes it is ready and a chain that
+ *      disagrees. That disagreement is the outcome.
+ *
+ * Do it in the other order and step 1's proposal is stamped with the NEW threshold,
+ * which produces below-threshold instead of threshold-drift -- a strictly weaker
+ * result that would still look like a refusal in the log.
+ */
+const GOVERN = {
+  'raise-threshold': {
+    describe: (safe) => `raise threshold ${safe.threshold} -> ${safe.threshold + 1} after signing`,
+    produces: 'threshold-drift',
+    build: (kit, safe, cast) => kit.createTransaction({
+      transactions: [{
+        to: null, value: '0',
+        data: encodeFunctionData({ abi: SAFE_GOV_ABI, functionName: 'changeThreshold',
+          args: [BigInt(safe.threshold + 1)] }),
+      }],
+    }),
+  },
+  'remove-owner': {
+    describe: (safe) => `remove owner ${safe.owners[1]}, whose signature is already on the payout`,
+    produces: 'owner-removed',
+    build: (kit, safe, cast) => kit.createTransaction({
+      transactions: [{
+        to: null, value: '0',
+        // prevOwner is the SENTINEL when removing the head of Safe's owner linked
+        // list. owners[1] is the second owner, so its predecessor is owners[0].
+        data: encodeFunctionData({ abi: SAFE_GOV_ABI, functionName: 'removeOwner',
+          args: [cast[safe.owners[0]].address, cast[safe.owners[1]].address, BigInt(safe.threshold - 1)] }),
+      }],
+    }),
+  },
+};
+
+const SAFE_GOV_ABI = [
+  { type: 'function', name: 'changeThreshold', stateMutability: 'nonpayable', inputs: [{ type: 'uint256' }], outputs: [] },
+  { type: 'function', name: 'removeOwner', stateMutability: 'nonpayable', inputs: [{ type: 'address' }, { type: 'address' }, { type: 'uint256' }], outputs: [] },
+];
+
+async function cmdGovern(chain, cast, flags) {
+  const id = flags.safe;
+  if (!id || id === true) die(`--safe <ID> is required, e.g. --safe BENCH_GOV`);
+  const safe = MANIFEST.safes.find((s) => s.id === id);
+  if (!safe) die(`unknown safe "${id}"`);
+  const action = flags.action && flags.action !== true ? flags.action : null;
+  const plan = action ? GOVERN[action] : null;
+  if (!plan) die(`--action needs one of: ${Object.keys(GOVERN).join(', ')}`);
+  if (!safe.roster) die(`${id} is roster:false — not-on-roster would shadow ${plan.produces}.`);
+
+  const client = createPublicClient({ transport: http(chain.rpc) });
+  const usdc = getContract({ address: chain.usdc, abi: ERC20_ABI, client });
+  const apiKit = new SafeApiKit({ chainId: BigInt(chain.id), apiKey: loadSafeApiKey() });
+  const address = await (await predictedKit(safe, chain, cast, undefined)).getAddress();
+
+  const held = await usdc.read.balanceOf([address]);
+  const [proposer, second, ...others] = safe.owners;
+
+  console.log(`\n  ${chain.name} (${chain.id}) — ${plan.produces} on ${id}`);
+  console.log(`    Safe       ${address}`);
+  console.log(`    change     ${plan.describe(safe)}`);
+  console.log(`    produces   drain.mjs should refuse with "${plan.produces}"`);
+  console.log(`    SPENDS GAS — one execTransaction from ${proposer}`);
+  if (!flags.yes) { console.log(`\n  Dry run. Re-run with --yes.\n`); return; }
+
+  const kit = await Safe.init({ provider: chain.rpc, signer: cast[proposer].pk, safeAddress: address });
+  const startNonce = Number(await kit.getNonce());
+
+  // ---- step 1: the payout that the config change will invalidate --------------
+  const payout = held > 0n ? held : parseUnits('1', 6);
+  const payoutTx = await kit.createTransaction({
+    transactions: [{
+      to: chain.usdc, value: '0',
+      data: encodeFunctionData({ abi: ERC20_ABI, functionName: 'transfer', args: [cast.PAYEE.address, payout] }),
+    }],
+    options: { nonce: startNonce + 1 },
+  });
+  const payoutHash = await kit.getTransactionHash(payoutTx);
+  await apiKit.proposeTransaction({
+    safeAddress: address, safeTransactionData: payoutTx.data, safeTxHash: payoutHash,
+    senderAddress: cast[proposer].address, senderSignature: (await kit.signHash(payoutHash)).data,
+  });
+  for (const role of [second, ...others].slice(0, safe.threshold - 1)) {
+    const ok = await Safe.init({ provider: chain.rpc, signer: cast[role].pk, safeAddress: address });
+    await apiKit.confirmTransaction(payoutHash, (await ok.signHash(payoutHash)).data);
+  }
+  console.log(`\n  [1/2] payout   proposed at nonce ${startNonce + 1}, signed to ${safe.threshold} — ${payoutHash.slice(0, 18)}…`);
+
+  // ---- step 2: the config change, executed --------------------------------
+  const govTx = await plan.build(kit, safe, cast);
+  govTx.data.to = address;                       // a Safe config change targets the Safe itself
+  const govHash = await kit.getTransactionHash(govTx);
+  govTx.addSignature(await kit.signHash(govHash));
+  for (const role of [second, ...others].slice(0, safe.threshold - 1)) {
+    const ok = await Safe.init({ provider: chain.rpc, signer: cast[role].pk, safeAddress: address });
+    govTx.addSignature(await ok.signHash(govHash));
+  }
+  const res = await kit.executeTransaction(govTx);
+  const receipt = await client.waitForTransactionReceipt({ hash: res.hash });
+  console.log(`  [2/2] config   EXECUTED ${plan.describe(safe)}`);
+  console.log(`                 tx ${chain.explorer}/tx/${res.hash} · ${receipt.status}`);
+  console.log(`\n  nonce ${startNonce} -> ${await kit.getNonce()}. The payout is now live and stale.`);
+  console.log(`  Verify: node scripts/drain.mjs --chain ${chain.id} --address ${address}\n`);
+}
+
 async function cmdRoster(chain, cast, flags) {
   const existing = JSON.parse(readFileSync(join(ROOT, 'src', 'roster.json'), 'utf8'));
   const wanted = MANIFEST.safes.filter((s) => s.roster);
@@ -540,7 +678,7 @@ const { cmd, flags } = parseArgs(process.argv);
 const chain = resolveChain(flags);
 const cast = loadCast();
 
-const COMMANDS = { status: cmdStatus, predict: cmdPredict, deploy: cmdDeploy, fund: cmdFund, stage: cmdStage, recycle: cmdRecycle, roster: cmdRoster };
+const COMMANDS = { status: cmdStatus, predict: cmdPredict, deploy: cmdDeploy, fund: cmdFund, stage: cmdStage, recycle: cmdRecycle, roster: cmdRoster, govern: cmdGovern };
 if (!COMMANDS[cmd]) {
   die(`unknown command "${cmd ?? ''}". Expected one of: ${Object.keys(COMMANDS).join(', ')}`);
 }

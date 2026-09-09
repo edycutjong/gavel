@@ -1,5 +1,5 @@
 {
-  "$comment": "The seed cast. One source of truth for both chains \u2014 seed.mjs selects by chainId. Every payload byte here is a literal (invariant G2): operation, safeTxGas, baseGas, gasPrice, gasToken and refundReceiver are never defaults.",
+  "$comment": "The seed cast. One source of truth for both chains — seed.mjs selects by chainId. Every payload byte here is a literal (invariant G2): operation, safeTxGas, baseGas, gasPrice, gasToken and refundReceiver are never defaults.",
   "chains": {
     "8453": {
       "name": "Base",
@@ -22,10 +22,10 @@
       "usdcVerified": "symbol=USDC decimals=6, read on-chain 2026-09-02",
       "fundKey": "fundUsdcRehearsal",
       "receiptsEligible": false,
-      "$note": "Substituted for Base Sepolia \u2014 see specs/cast.md. receiptsEligible:false is load-bearing: NO row from this chain may ever enter receipts.json or EVIDENCE.md (seed-data.md \u00a78.1)."
+      "$note": "Substituted for Base Sepolia — see specs/cast.md. receiptsEligible:false is load-bearing: NO row from this chain may ever enter receipts.json or EVIDENCE.md (seed-data.md §8.1)."
     }
   },
-  "$amounts": "fundUsdc is the mainnet manifest (282.00 total, seed-data.md \u00a73). fundUsdcRehearsal is scaled to fit the 20 USDC the Sepolia faucet provides (17.00 total, 3.00 spare). Ratios and every branch are preserved; only magnitude changes.",
+  "$amounts": "fundUsdc is the mainnet manifest (282.00 total, seed-data.md §3). fundUsdcRehearsal is scaled to fit the 20 USDC the Sepolia faucet provides (17.00 total, 3.00 spare). Ratios and every branch are preserved; only magnitude changes.",
   "safes": [
     {
       "id": "HERO_A",
@@ -124,10 +124,11 @@
       ],
       "threshold": 2,
       "saltNonce": "3001",
-      "roster": false,
+      "roster": true,
       "fundUsdc": "2.000000",
       "fundUsdcRehearsal": "1.000000",
-      "purpose": "The deliberate GS026 (M3). Fresh payout per race take."
+      "purpose": "The deliberate GS026 (M3). Fresh payout per race take.",
+      "rosterReason": "on the roster so the outcome this Safe exists to demonstrate is actually reachable: not-on-roster is the FIRST check in assemble.mjs, so a roster:false bench Safe refuses on the roster gate and never reaches its own scenario"
     },
     {
       "id": "BENCH_REFUND",
@@ -166,10 +167,11 @@
       ],
       "threshold": 2,
       "saltNonce": "3004",
-      "roster": false,
+      "roster": true,
       "fundUsdc": "5.000000",
       "fundUsdcRehearsal": "1.000000",
-      "purpose": "threshold-drift / owner-removed, performed live on the finalist call."
+      "purpose": "threshold-drift / owner-removed, performed live on the finalist call.",
+      "rosterReason": "on the roster so the outcome this Safe exists to demonstrate is actually reachable: not-on-roster is the FIRST check in assemble.mjs, so a roster:false bench Safe refuses on the roster gate and never reaches its own scenario"
     },
     {
       "id": "BENCH_GS013",
@@ -180,11 +182,12 @@
       ],
       "threshold": 2,
       "saltNonce": "3005",
-      "roster": false,
+      "roster": true,
       "fundUsdc": "0.000000",
       "fundUsdcRehearsal": "0.000000",
       "purpose": "Permanent 1.00 payout against a DELIBERATELY EMPTY Safe -> inner-call-failed (GS013). Broadcasts, reverts, real hash.",
-      "mustStayEmpty": true
+      "mustStayEmpty": true,
+      "rosterReason": "on the roster so the outcome this Safe exists to demonstrate is actually reachable: not-on-roster is the FIRST check in assemble.mjs, so a roster:false bench Safe refuses on the roster gate and never reaches its own scenario"
     },
     {
       "id": "BENCH_ROTATE",
@@ -195,10 +198,11 @@
       ],
       "threshold": 2,
       "saltNonce": "3006",
-      "roster": false,
+      "roster": true,
       "fundUsdc": "5.000000",
       "fundUsdcRehearsal": "1.000000",
-      "purpose": "Workbench: not-next-nonce, delegatecall-refused, nonce-conflict, plus the day-1 Direct Execution tx."
+      "purpose": "Workbench: not-next-nonce, delegatecall-refused, nonce-conflict, plus the day-1 Direct Execution tx.",
+      "rosterReason": "on the roster so the outcome this Safe exists to demonstrate is actually reachable: not-on-roster is the FIRST check in assemble.mjs, so a roster:false bench Safe refuses on the roster gate and never reaches its own scenario"
     }
   ],
   "projectId": "7z52riztpqknjb2cunbbk"

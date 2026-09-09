@@ -168,13 +168,27 @@ try {
   }
   console.log(`  [2/3] eth_call  SUCCEEDS`);
 } catch (e) {
-  const msg = String(e.shortMessage || e.message || e).split('\n')[0];
+  // The reason is what makes this row diagnostic rather than decorative, and viem
+  // puts it on a LATER line than shortMessage -- so splitting on the first newline
+  // threw away the GS-code and left every revert looking identical. Keep the whole
+  // message for classification; trim only what is printed.
+  const full = String(e.shortMessage || e.message || e);
+  const gs = full.match(/GS\d{3}/)?.[0] ?? null;
+  const reason = full.match(/reverted with the following reason:\s*\n?\s*(.+)/)?.[1]?.trim();
+  const msg = [full.split('\n')[0], gs ?? reason].filter(Boolean).join(' — ');
   console.log(`  [2/3] eth_call  REVERTS — ${msg.slice(0, 120)}`);
   console.log(`        refusing to broadcast a transaction that cannot land.`);
   // GS026 is Safe's "invalid owner provided" / already-consumed-nonce revert. When
   // it surfaces here it is the race, not a malformed blob, and it is outcome 8 --
   // not a generic precondition failure.
-  note(/GS026/.test(msg) ? 'raced-gs026' : 'eth-call-reverted', 'eth_call', {
+  // GS026 is an already-consumed nonce: the race, outcome 8. GS013 is the inner
+  // call reverting while the outer one does not survive it, which is outcome 9 --
+  // the same shape the sim.result === false branch above catches when safeTxGas is
+  // non-zero. Both are named outcomes, not generic precondition noise.
+  const outcome = gs === 'GS026' ? 'raced-gs026'
+                : gs === 'GS013' ? 'inner-call-failed'
+                : 'eth-call-reverted';
+  note(outcome, 'eth_call', {
     detail: msg.slice(0, 200), queueCount: queue.count, nonce, threshold,
   });
   process.exit(1);
@@ -228,9 +242,22 @@ console.log(`    executionId  ${j.executionId ?? '(none)'}`);
 console.log(`    status       ${j.status ?? out.status}`);
 if (j.transactionHash) console.log(`    tx           ${chain.explorer}/tx/${j.transactionHash}`);
 else console.log(`    no transactionHash — the call never broadcast: ${JSON.stringify(j).slice(0, 240)}`);
-note(j.transactionHash ? 'executed' : 'broadcast-no-hash', 'broadcast', {
-  detail: j.transactionHash ? null : JSON.stringify(j).slice(0, 240),
-  executionId: j.executionId ?? null, tx: j.transactionHash ?? null,
-  queueCount: queue.count, nonce, threshold,
-});
+// A losing race comes back HERE, in the execute response body, not from either
+// preflight: both gates passed because at the moment they ran the nonce was still
+// live. Classifying this as generic no-hash plumbing would file the single most
+// interesting thing that can happen to an executor under "misc".
+const outBody = JSON.stringify(j);
+const outGs = outBody.match(/GS\d{3}/)?.[0] ?? null;
+note(
+  j.transactionHash ? 'executed'
+  : outGs === 'GS026' ? 'raced-gs026'
+  : outGs === 'GS013' ? 'inner-call-failed'
+  : 'broadcast-no-hash',
+  'broadcast',
+  {
+    detail: j.transactionHash ? null : outBody.slice(0, 240),
+    executionId: j.executionId ?? null, tx: j.transactionHash ?? null,
+    queueCount: queue.count, nonce, threshold,
+  },
+);
 console.log();

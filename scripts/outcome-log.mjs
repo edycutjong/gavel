@@ -34,25 +34,43 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
  * them. Kept here as data so a typo in a call site fails loudly instead of
  * quietly inventing an eleventh outcome that no test covers.
  */
+/**
+ * `unreachable` records an outcome that CANNOT be produced through the production
+ * data source, with the reason. This is not a gap in the campaign — it is a
+ * finding, measured on 2026-09-09 against the live Safe Transaction Service, and
+ * the guard stays in assemble.mjs regardless: the pure function is source-agnostic
+ * and a queue that does not normalise (the Safe plugin projection, a self-hosted
+ * service, a replayed fixture) can still present these shapes.
+ */
 export const TAXONOMY = Object.freeze({
   'not-next-nonce':       { n: 1, decidedBy: 'assemble', class: 'refusal' },
   'below-threshold':      { n: 2, decidedBy: 'assemble', class: 'refusal' },
   'eip1271-unsupported':  { n: 3, decidedBy: 'assemble', class: 'refusal' },
   'refund-requested':     { n: 4, decidedBy: 'assemble', class: 'refusal' },
   'delegatecall-refused': { n: 5, decidedBy: 'assemble', class: 'refusal' },
-  'threshold-drift':      { n: 6, decidedBy: 'assemble', class: 'refusal' },
-  'owner-removed':        { n: 7, decidedBy: 'assemble', class: 'refusal' },
+  'threshold-drift':      { n: 6, decidedBy: 'assemble', class: 'refusal',
+    unreachable: 'the Safe Transaction Service reports confirmationsRequired as the LIVE threshold, '
+      + 'not a proposal-time snapshot — measured on BENCH_GOV 2026-09-09: threshold raised 2->3 after '
+      + 'signing and the service immediately reported 3, so queueThreshold < onchainThreshold never holds' },
+  'owner-removed':        { n: 7, decidedBy: 'assemble', class: 'refusal',
+    unreachable: 'the Safe Transaction Service PRUNES confirmations from addresses that are no longer '
+      + 'owners — measured on BENCH_ROTATE 2026-09-09: O2 signed, O2 was removed, and the service then '
+      + 'returned the transaction with O2 absent from confirmations entirely' },
   'raced-gs026':          { n: 8, decidedBy: 'chain',    class: 'refusal' },
   'inner-call-failed':    { n: 9, decidedBy: 'chain',    class: 'refusal' },
   'not-on-roster':        { n: null, decidedBy: 'assemble', class: 'guard' },
-  'incomplete-payload':   { n: null, decidedBy: 'assemble', class: 'guard' },
+  'incomplete-payload':   { n: null, decidedBy: 'assemble', class: 'guard',
+    unreachable: 'reachable only through the CANVAS path, where the Safe plugin projection omits five '
+      + "of execTransaction's ten arguments; drain.mjs hydrates from the tx service and always has all ten" },
   // The twelfth. build/README.md documents "nine named outcomes" plus two guards;
   // src/assemble.mjs also returns `malformed-payload` from nine call sites for
   // input that is not well-formed at all (a safeAddress that is not 20 bytes, a
   // non-integer nonce, an empty owner array). It is a real, reachable, distinct
   // reason and the README does not list it. Recorded here rather than folded into
   // another bucket, because collapsing it would hide the gap instead of showing it.
-  'malformed-payload':    { n: null, decidedBy: 'assemble', class: 'guard' },
+  'malformed-payload':    { n: null, decidedBy: 'assemble', class: 'guard',
+    unreachable: 'inputs come from the chain and the Safe Transaction Service, both well-formed by '
+      + 'construction; this guards a caller that hands assemble.mjs garbage directly' },
 });
 
 /**
