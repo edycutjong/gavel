@@ -552,7 +552,20 @@ async function cmdStage(chain, cast, flags) {
  * result that would still look like a refusal in the log.
  */
 const GOVERN = {
+  // Not a config change: the cheap route to outcome 3. A Safe owner can pre-approve
+  // a transaction hash ON-CHAIN with approveHash(bytes32) instead of producing an
+  // ECDSA signature. checkSignatures then accepts a 65-byte word whose v is 1 --
+  // r is the owner address, s is zero, and nothing is actually verified. That is
+  // exactly the shape assemble.mjs refuses, and it needs no contract deployment:
+  // the alternative, a real EIP-1271 CONTRACT_SIGNATURE (v=0), would mean writing
+  // and deploying a signer contract for the same refusal.
+  'approve-hash': {
+    kind: 'approve-hash',
+    describe: (safe) => `owner ${safe.owners[1]} pre-approves the hash on-chain (v=1) instead of signing`,
+    produces: 'eip1271-unsupported',
+  },
   'raise-threshold': {
+    kind: 'config',
     describe: (safe) => `raise threshold ${safe.threshold} -> ${safe.threshold + 1} after signing`,
     produces: 'threshold-drift',
     build: (kit, safe, cast) => kit.createTransaction({
@@ -564,6 +577,7 @@ const GOVERN = {
     }),
   },
   'remove-owner': {
+    kind: 'config',
     describe: (safe) => `remove owner ${safe.owners[1]}, whose signature is already on the payout`,
     produces: 'owner-removed',
     build: (kit, safe, cast) => kit.createTransaction({
@@ -579,6 +593,7 @@ const GOVERN = {
 };
 
 const SAFE_GOV_ABI = [
+  { type: 'function', name: 'approveHash', stateMutability: 'nonpayable', inputs: [{ type: 'bytes32' }], outputs: [] },
   { type: 'function', name: 'changeThreshold', stateMutability: 'nonpayable', inputs: [{ type: 'uint256' }], outputs: [] },
   { type: 'function', name: 'removeOwner', stateMutability: 'nonpayable', inputs: [{ type: 'address' }, { type: 'address' }, { type: 'uint256' }], outputs: [] },
 ];
@@ -605,7 +620,9 @@ async function cmdGovern(chain, cast, flags) {
   console.log(`    Safe       ${address}`);
   console.log(`    change     ${plan.describe(safe)}`);
   console.log(`    produces   drain.mjs should refuse with "${plan.produces}"`);
-  console.log(`    SPENDS GAS — one execTransaction from ${proposer}`);
+  console.log(plan.kind === 'approve-hash'
+    ? `    SPENDS GAS — one approveHash from ${second} (auto-funded from ${proposer} if it holds none)`
+    : `    SPENDS GAS — one execTransaction from ${proposer}`);
   if (!flags.yes) { console.log(`\n  Dry run. Re-run with --yes.\n`); return; }
 
   const kit = await Safe.init({ provider: chain.rpc, signer: cast[proposer].pk, safeAddress: address });
@@ -613,23 +630,63 @@ async function cmdGovern(chain, cast, flags) {
 
   // ---- step 1: the payout that the config change will invalidate --------------
   const payout = held > 0n ? held : parseUnits('1', 6);
+  // approve-hash needs the payout at the CURRENT nonce — there is no config change
+  // coming to advance it. The other two put it at N+1 so the change at N can land
+  // first and leave it stale.
+  const payoutNonce = plan.kind === 'approve-hash' ? startNonce : startNonce + 1;
   const payoutTx = await kit.createTransaction({
     transactions: [{
       to: chain.usdc, value: '0',
       data: encodeFunctionData({ abi: ERC20_ABI, functionName: 'transfer', args: [cast.PAYEE.address, payout] }),
     }],
-    options: { nonce: startNonce + 1 },
+    options: { nonce: payoutNonce },
   });
   const payoutHash = await kit.getTransactionHash(payoutTx);
   await apiKit.proposeTransaction({
     safeAddress: address, safeTransactionData: payoutTx.data, safeTxHash: payoutHash,
     senderAddress: cast[proposer].address, senderSignature: (await kit.signHash(payoutHash)).data,
   });
-  for (const role of [second, ...others].slice(0, safe.threshold - 1)) {
+  // approve-hash deliberately stops at the proposer: the SECOND confirmation is
+  // the on-chain approval below, and signing it here too would make it an ordinary
+  // EOA signature and produce nothing.
+  const offChain = plan.kind === 'approve-hash' ? [] : [second, ...others].slice(0, safe.threshold - 1);
+  for (const role of offChain) {
     const ok = await Safe.init({ provider: chain.rpc, signer: cast[role].pk, safeAddress: address });
     await apiKit.confirmTransaction(payoutHash, (await ok.signHash(payoutHash)).data);
   }
-  console.log(`\n  [1/2] payout   proposed at nonce ${startNonce + 1}, signed to ${safe.threshold} — ${payoutHash.slice(0, 18)}…`);
+  console.log(`\n  [1/2] payout   proposed at nonce ${payoutNonce}, ${offChain.length + 1} off-chain signature(s) — ${payoutHash.slice(0, 18)}…`);
+
+  if (plan.kind === 'approve-hash') {
+    // The approver must be a DIFFERENT owner from the proposer: assemble.mjs
+    // deduplicates a repeated signer, so O1 signing off-chain and approving
+    // on-chain would collapse to one signature and produce below-threshold.
+    // A fresh cast owner has never sent a transaction and holds no ETH, so top it
+    // up rather than failing with an opaque insufficient-funds error.
+    const gas = await client.getBalance({ address: cast[second].address });
+    if (gas < parseUnits('0.002', 18)) {
+      const funder = createWalletClient({
+        account: privateKeyToAccount(cast[proposer].pk), transport: http(chain.rpc), chain: undefined,
+      });
+      const ft = await funder.sendTransaction({
+        to: cast[second].address, value: parseUnits('0.005', 18), chain: null,
+      });
+      await client.waitForTransactionReceipt({ hash: ft });
+      console.log(`  [1b]  gas      funded ${second} with 0.005 ETH from ${proposer}`);
+    }
+    const wallet = createWalletClient({
+      account: privateKeyToAccount(cast[second].pk), transport: http(chain.rpc), chain: undefined,
+    });
+    const hash = await wallet.sendTransaction({
+      to: address, chain: null,
+      data: encodeFunctionData({ abi: SAFE_GOV_ABI, functionName: 'approveHash', args: [payoutHash] }),
+    });
+    const rc = await client.waitForTransactionReceipt({ hash });
+    console.log(`  [2/2] approve  ${second} called approveHash on-chain — ${rc.status}`);
+    console.log(`                 tx ${chain.explorer}/tx/${hash}`);
+    console.log(`\n  The queue now carries one EOA signature and one APPROVED_HASH (v=1).`);
+    console.log(`  Verify: node scripts/drain.mjs --chain ${chain.id} --address ${address}\n`);
+    return;
+  }
 
   // ---- step 2: the config change, executed --------------------------------
   const govTx = await plan.build(kit, safe, cast);

@@ -151,7 +151,7 @@ by [`scripts/outcome-log.mjs`](scripts/outcome-log.mjs). The table is generated,
 |---|---|---|---|---|---|
 | 1 | `not-next-nonce` | assemble | ✅ | ✅ | 5 |
 | 2 | `below-threshold` | assemble | ✅ | ✅ | 2 |
-| 3 | `eip1271-unsupported` | assemble | ✅ | ❌ | 0 |
+| 3 | `eip1271-unsupported` | assemble | ✅ | ✅ | 1 |
 | 4 | `refund-requested` | assemble | ✅ | ✅ | 1 |
 | 5 | `delegatecall-refused` | assemble | ✅ | ✅ | 1 |
 | 6 | `threshold-drift` | assemble | ✅ | **n/a** | 0 |
@@ -162,8 +162,13 @@ by [`scripts/outcome-log.mjs`](scripts/outcome-log.mjs). The table is generated,
 | — | `incomplete-payload` | assemble | ✅ | **n/a** | 0 |
 | — | `malformed-payload` | assemble | ✅ | **n/a** | 0 |
 
-**7 of the 8 reachable outcomes have been observed.** Only `eip1271-unsupported` has not, and it
-needs a deployed contract signer added as an owner.
+**All 8 reachable outcomes have been observed against a real Safe on a real chain.** The last one,
+`eip1271-unsupported`, needed no signer contract in the end: a Safe owner can pre-approve a hash
+**on-chain** with `approveHash(bytes32)` instead of producing an ECDSA signature, and
+`checkSignatures` then accepts a 65-byte word whose `v` is **1** — `r` is the owner address, `s` is
+zero, and nothing is verified at all. That is the same shape the guard refuses, and it costs one
+cheap transaction from an EOA rather than a deployment. `seed.mjs govern --action approve-hash`
+does it.
 
 **Four are marked `n/a`, and that is a finding rather than a gap.** They cannot be produced through
 the production data source at all:
