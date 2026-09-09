@@ -342,7 +342,7 @@
     </li>
     <li>
       <a href="https://github.com/edycutjong/gavel">Read the code</a> — <code>src/assemble.mjs</code> is the entire decision surface
-      <span class="expect"><code>npm test</code> · 80 tests, 100% line and branch coverage on the decision surface, one of which runs against a committed real Safe Transaction Service response</span>
+      <span class="expect"><code>npm test</code> · 87 tests, 100% line and branch coverage on the decision surface, one of which runs against a committed real Safe Transaction Service response</span>
     </li>
   </ol>
 
@@ -373,7 +373,7 @@
   <div class="card reveal" style="font-size:15px">
     <p style="margin:0 0 10px"><b style="color:var(--hi)">The decision surface is finished and pure.</b>
     <code>src/assemble.mjs</code> — zero dependencies, zero I/O, seven named pre-broadcast refusals,
-    <b style="color:var(--hi)">80 tests at 100% line and branch coverage</b>, one of them run against a
+    <b style="color:var(--hi)">87 tests at 100% line and branch coverage</b>, one of them run against a
     committed real Transaction Service response rather than a fixture we invented.</p>
     <p style="margin:0 0 10px"><b style="color:var(--hi)">The number this is built on is reproducible.</b>
     1,299 Base mainnet Safes, and all 22 published figures re-derive offline from the raw responses
@@ -383,8 +383,8 @@
     on-chain by an address that owns none of them, and <code>isOwner(executor)</code> returns
     <em style="color:var(--green);font-style:normal">false</em> for anyone who checks. Testnet, and
     labelled as such — but the mechanism is not a diagram.</p>
-    <p style="margin:0"><b style="color:var(--hi)">24 executions through KeeperHub, 24 successful.</b>
-    Median <b style="color:var(--hi)">14.3 s</b> from accepted to mined, p95 26.3 s, reduced from
+    <p style="margin:0"><b style="color:var(--hi)">150 executions through KeeperHub, 150 successful.</b>
+    Median <b style="color:var(--hi)">11.6 s</b> from accepted to mined, p95 26.3 s, reduced from
     KeeperHub's own rows by <code>python3 scripts/bench.py</code> — stdlib only, no network, CI-run.
     Rehearsal figures: <code>audit.mjs</code> refuses to write a testnet row into evidence, and that
     refusal applies to these numbers too.</p>
