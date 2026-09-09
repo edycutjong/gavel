@@ -276,11 +276,16 @@
         <code>getThreshold()</code> and <code>getOwners()</code>. All seven plugin actions are reads —
         which is exactly why the write below has to exist.</td></tr>
       <tr><td>execute/<wbr>contract-call</td><td><b>Direct Execution.</b> Always <code>simulate: true</code>
-        as a preflight, then the real call with an <code>Idempotency-Key</code>, so a retry cannot
-        double-broadcast.</td></tr>
+        as a preflight, then the real call. <b>There is no idempotency key</b> &mdash; this page claimed one
+        until 2026-09-09 and the API exposes none. Two identical calls both broadcast: that is what the
+        deliberate race did, and one returned <code>Error(GS026)</code>. Only the Safe nonce stops a
+        double-spend.</td></tr>
       <tr><td>analytics/<wbr>runs</td><td><b>The audit ledger.</b> KeeperHub's own execution rows carry
-        <code>verified</code>, <code>receiptStatus</code>, <code>blockNumber</code> and <code>gasUsed</code>.
-        <code>audit.mjs</code> renders them and never computes one.</td></tr>
+        <code>status</code>, <code>durationMs</code> and <code>gasUsedWei</code>, and
+        <code>audit.mjs</code> renders those without computing one.
+        <code>receiptStatus</code>, <code>blockNumber</code> and <code>gasUsed</code> are
+        <b>ours</b>, added by <code>--verify</code> from the chain &mdash; this page credited them
+        to KeeperHub until 2026-09-09.</td></tr>
       <tr><td>workflows/<wbr>create</td><td><b>The graph.</b> Eleven nodes, ten edges, generated per chain by
         <code>sync.mjs</code>, which injects <code>assemble.mjs</code> <b>verbatim</b> into the Code node —
         so the function the tests run offline and the function the canvas runs on-chain cannot drift
@@ -376,7 +381,7 @@
     <b style="color:var(--hi)">87 tests at 100% line and branch coverage</b>, one of them run against a
     committed real Transaction Service response rather than a fixture we invented.</p>
     <p style="margin:0 0 10px"><b style="color:var(--hi)">The number this is built on is reproducible.</b>
-    1,299 Base mainnet Safes, and all 22 published figures re-derive offline from the raw responses
+    1,299 Base mainnet Safes, and all 24 published figures re-derive offline from the raw responses
     committed beside them — <code>python3 survey/rederive.py</code>, no network, no credentials. CI runs it,
     so the prose cannot drift from the measurement.</p>
     <p style="margin:0 0 10px"><b style="color:var(--hi)">And it works, repeatedly.</b> Safes drained
