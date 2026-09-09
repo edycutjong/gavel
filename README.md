@@ -145,20 +145,20 @@ no scheduler and no wallet of its own; every read, every gate and the broadcast 
 KeeperHub. Four API surfaces and the Safe plugin carry the whole flow:
 
 Every surface below carries a **liveness claim**. "Live" means it ran in the path that produced
-the 50 executions on record. "Authored" means it is committed and was verified during the spikes,
+the 150 executions on record. "Authored" means it is committed and was verified during the spikes,
 but the production path does not go through it — and saying so is more useful to you than a longer
 list of yeses.
 
 | Surface | Liveness | Where | What it does |
 |---|---|---|---|
-| **`POST /api/execute/contract-call`** | ✅ **live — all 50 executions** | [`scripts/drain.mjs:164`](scripts/drain.mjs) | Direct Execution. Always `simulate: true` as a preflight, then the real call with an `Idempotency-Key` so a retry can never double-broadcast |
-| **`GET /api/analytics/runs`** | ✅ **live — 50 rows** | [`scripts/audit.mjs:53`](scripts/audit.mjs) | KeeperHub's own execution rows — `verified`, `receiptStatus`, `blockNumber`, `gasUsed` — are the audit ledger. We render them; we never compute them |
+| **`POST /api/execute/contract-call`** | ✅ **live — all 150 executions** | [`scripts/drain.mjs:164`](scripts/drain.mjs) | Direct Execution. Always `simulate: true` as a preflight, then the real call with an `Idempotency-Key` so a retry can never double-broadcast |
+| **`GET /api/analytics/runs`** | ✅ **live — 150 rows** | [`scripts/audit.mjs:53`](scripts/audit.mjs) | KeeperHub's own execution rows — `verified`, `receiptStatus`, `blockNumber`, `gasUsed` — are the audit ledger. We render them; we never compute them |
 | **MCP server** | ✅ live, design-time | spikes | `get_plugin`, `get_spending_limits`, `list_projects`, `list_integrations`, `GET /api/mcp/schemas`. Every platform claim here was checked against a live MCP call |
 | **`POST /api/workflows/create`** | ⚠️ **called, rejected** | [`scripts/sync.mjs:300`](scripts/sync.mjs) | Emits the `gavel-drain` graph — 11 nodes, 10 edges, committed at [`workflows/`](workflows/). The API returns `upgrade_required`: `code/run-code` and `HTTP Request` are plan-gated (**issue #2279**) |
 | **Safe plugin reads** — `safe/get-pending-transactions`, `-threshold`, `-owners`, `-nonce` | ⚠️ **authored, not in the production path** | `workflows/*.json` nodes `queue-1`, `threshold-1`, `owners-1`, `nonce-1` | They are the canonical design and were verified in the spikes, but the graph holding them was never created. `drain.mjs` instead reads the queue from `api.safe.global` and takes `nonce()`/`getThreshold()`/`getOwners()` with viem straight off the RPC |
 | **`web3/read-contract`** · **`web3/write-contract`** | ⚠️ **authored, not in the production path** | `workflows/*.json` nodes `read-*`, `exec-1` | Same gate. `exec-1` is why the graph exists — all **7** Safe plugin actions are reads, so there is no Safe-plugin write action to execute with |
 
-**So be precise about what "through KeeperHub" means here.** Value moved through KeeperHub 50 times
+**So be precise about what "through KeeperHub" means here.** Value moved through KeeperHub 150 times
 and the ledger proving it is KeeperHub's own — that part is real. The *reads* feeding the decision
 do not currently go through KeeperHub in the running path, because the workflow that would carry
 them is plan-gated. The canvas version and `drain.mjs` reach the identical on-chain outcome; they
@@ -211,10 +211,14 @@ Predicted, then measured. The cryptographic surface stays at six lines.
 
 ---
 
-## ✅ What is actually proven, as of 2026-09-02
+## ✅ What is actually proven, as of 2026-09-09
 
-**One real end-to-end execution through KeeperHub**, on Ethereum Sepolia (11155111) — the
-**rehearsal** chain:
+**150 end-to-end executions through KeeperHub**, on Ethereum Sepolia (11155111) — the
+**rehearsal** chain. [`docs/receipts-11155111.json`](docs/receipts-11155111.json) holds all 150,
+150 of 150 `success`, every one via the Direct Execution API, in the window
+2026-09-06T16:01Z → 2026-09-07T10:11Z. The execution detailed below is an **earlier** one and is
+deliberately not among those 150 — it is the first that ran end to end, and it is the one whose
+every field was checked by hand:
 
 | | |
 |---|---|
@@ -229,7 +233,7 @@ A threshold-met, deliberately unexecuted payout was drained by an address that o
 Safe. Three gates ran first and all passed: `assemble.mjs` → a local read-only `eth_call` →
 KeeperHub's own `simulate: true` preflight.
 
-Also standing up today:
+Also standing up:
 
 - **12 Safes deployed and funded** on Ethereum Sepolia from one manifest, CREATE2-deterministic —
   thresholds 1-of-2 through 3-of-5, five of them on the opt-in roster.
