@@ -214,8 +214,12 @@ The graph is generated, never hand-drawn: `sync.mjs` injects [`src/assemble.mjs`
 **verbatim** into the Code node, so the function the tests run offline and the function the canvas
 runs on-chain cannot drift apart. That is the whole reason the decision surface is pure.
 
-Seven reproducible findings came out of building against it, dated as they were hit and filed
-upstream — see [`DX-REPORT.md`](DX-REPORT.md).
+Eight reproducible findings came out of building against it, dated as they were hit and filed
+upstream — see [`DX-REPORT.md`](DX-REPORT.md). The latest is the sharpest: **`analytics/runs` ages
+history out with no signal**, so the endpoint this project treats as the audit trail returned 150
+runs on 09-07 and 2 on 09-09. `audit.mjs` now refuses to shrink `docs/receipts-*.json` without
+`--prune`, because a regenerate-in-place would have destroyed a ledger the API can no longer
+reproduce. The transaction hashes on disk remain verifiable on the explorer regardless.
 
 ---
 ## 🕳️ The gap that would have silently disarmed a security guard
@@ -462,7 +466,7 @@ refusing correctly is a success, not an error.
 | [`contracts/`](contracts/) | `MockUSDC.sol`, the testnet stand-in, and [`contracts/test/`](contracts/test/) — 22 tests at 100% coverage on every metric, dependency-free |
 | [`test/`](test/) | 87 tests: unit fixtures, the live-response regression file, manifest/roster invariants, and the coverage-gap suite ([`COVERAGE.md`](test/COVERAGE.md)) |
 | [`survey/`](survey/) | The 1,299-Safe measurement: collectors, 1.3 MB of raw responses, and `rederive.py`, which asserts all 24 published figures offline |
-| [`DX-REPORT.md`](DX-REPORT.md) | Seven reproducible KeeperHub findings, dated as they were hit |
+| [`DX-REPORT.md`](DX-REPORT.md) | Eight reproducible KeeperHub findings, dated as they were hit |
 | [`workflows/`](workflows/) | Generated `gavel-drain` graph, 11 nodes (1 trigger + 10 actions), 10 edges |
 | [`docs/rehearsal-11155111.md`](docs/rehearsal-11155111.md) | Rehearsal log. Labelled NOT EVIDENCE |
 | [`docs/outcomes-11155111.jsonl`](docs/outcomes-11155111.jsonl) | Every decision gavel made on that chain, refusals included. Append-only JSON Lines |

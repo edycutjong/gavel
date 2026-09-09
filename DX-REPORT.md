@@ -284,3 +284,36 @@ demo. Asking the organiser in Discord before restructuring.
   `staging` before it may be filed**: `check-and-execute` cannot address a member of a
   tuple-returning read (observed in production 2026-08-08, 25+ days stale as of this
   writing).
+
+---
+
+## DX-8 · `analytics/runs` silently ages history out, and it is the audit trail
+
+**Severity:** high — it makes an execution ledger unreproducible, with no signal that it happened.
+**Date:** 2026-09-09
+
+`GET /api/analytics/runs` is the only machine-readable record of what KeeperHub executed, and this
+project treats it as exactly that: `scripts/audit.mjs` paginates it to `nextCursor` exhaustion and
+renders the result as the audit trail.
+
+On 2026-09-07 that call returned **150 runs** for this org. On 2026-09-09, paginated identically
+with the same credential, it returned **2** — both from that morning. The 150 executions of
+2026-09-06/07 were gone. Nothing in the response distinguishes "you have 2 runs" from "you have 2
+runs left": there is no retention field, no truncation flag, no `total`, and the pagination
+terminates normally.
+
+The consequence is worse than a missing feature. A regenerate-in-place — the documented workflow
+for this kind of artifact, and what our own file header instructed — **silently replaces a 150-row
+audit trail with a 2-row one and exits 0.** We hit exactly that and recovered only because the file
+was committed. `audit.mjs` now refuses to shrink the file without an explicit `--prune`.
+
+A second-order effect worth naming: a run that fails has no `transactionHashes`, so it contributes
+no row at all. The losing half of a deliberate race (`yhak2pfniragtz0x8we15`, `Error(GS026)`) is
+invisible in the receipts even while it is still inside the retention window. The endpoint that
+records what executed structurally cannot record what did not.
+
+**Suggested fix:** state the retention period in the docs and return it in the response; add a
+`total` or an explicit `truncated` flag so a client can tell exhaustion from expiry; and expose
+failed runs with enough identity to be counted even without a transaction hash. If retention is
+plan-dependent, say which plan buys what — this is the one endpoint whose whole value is that it
+remembers.
