@@ -13,6 +13,8 @@
  *   deploy              deploy any Safe in the manifest that is not yet on-chain.
  *   fund                move USDC from O1 into each Safe per the manifest.
  *   stage               propose + sign a payout to threshold, and STOP. Never executes.
+ *                       --hostile <variant> stages a queue shaped to force ONE named
+ *                       refusal instead of the drainable happy path. See HOSTILE below.
  *   recycle             move drained USDC from PAYEE back to O1, closing the loop.
  *
  * Usage
@@ -21,6 +23,7 @@
  *   node scripts/seed.mjs deploy  --chain 11155111 [--only HERO_A,VOL_1] [--yes]
  *   node scripts/seed.mjs fund    --chain 11155111 [--yes]
  *   node scripts/seed.mjs recycle --chain 11155111 [--amount 5.0] [--yes]
+ *   node scripts/seed.mjs stage   --chain 11155111 --safe VOL_2 --hostile below-threshold --yes
  *
  * Keys never enter this tree. They are parsed out of ~/.config/gavel/seed.txt,
  * which is `cast wallet new-mnemonic` output — a human-readable block, NOT
@@ -349,11 +352,70 @@ async function cmdRecycle(chain, cast, flags) {
  * Signing is off-chain and free — no gas, no on-chain transaction. Only the eventual
  * execTransaction costs anything, and executing is precisely what we do not do here.
  */
+/**
+ * HOSTILE — queue shapes that force one named refusal.
+ *
+ * WHY THESE EXIST. The nine named outcomes were covered by unit tests over
+ * fixtures and by nothing else: no refusal had ever been OBSERVED against a real
+ * Safe and a real chain, because the happy path is the only thing `stage` could
+ * produce. A refusal branch proven only in test/ is a claim about a pure
+ * function; a refusal branch with a row in docs/outcomes-<chain>.jsonl is a claim
+ * about this software. Those are different evidence.
+ *
+ * WHY THEY GO ON ROSTERED SAFES. `not-on-roster` is the FIRST check in
+ * assemble.mjs, so every BENCH_* Safe — all of which carry roster:false — refuses
+ * on the roster gate before reaching the outcome the manifest built it for. The
+ * bench cast cannot demonstrate its own scenarios. Rather than weaken I3 with a
+ * bypass flag, the hostile queue is staged on a Safe that is genuinely on the
+ * roster, and the refusal is genuinely the one under test.
+ *
+ * COST AND CONSEQUENCE. A proposal is an off-chain signature: these three cost no
+ * gas and touch no chain state. But the hostile transaction occupies the Safe's
+ * CURRENT nonce, so that Safe stops being drainable until the nonce moves — which
+ * is the point, and is why HERO_A (the demo Safe) and VOL_1 (threshold 1, the
+ * cheapest volume Safe) are left out of the campaign.
+ */
+const HOSTILE = {
+  'below-threshold': {
+    needs: (safe) => safe.threshold >= 2 || 'needs threshold >= 2; at threshold 1 the proposer alone meets it',
+    describe: 'sign with the proposer ONLY, leaving the queue short of threshold',
+    // Nothing to change about the payload — the shortfall IS the shape.
+    signToThreshold: false,
+  },
+  'refund-requested': {
+    needs: () => true,
+    describe: 'non-zero gasPrice — the refund drain vector aimed at the executor (I4)',
+    options: { gasPrice: '1' },
+    signToThreshold: true,
+  },
+  'delegatecall-refused': {
+    needs: () => true,
+    describe: 'operation = 1, a DELEGATECALL into someone else\'s treasury (I5)',
+    operation: 1,
+    signToThreshold: true,
+  },
+};
+
 async function cmdStage(chain, cast, flags) {
   const id = flags.safe;
   if (!id || id === true) die(`--safe <ID> is required, e.g. --safe HERO_A`);
   const safe = MANIFEST.safes.find((s) => s.id === id);
   if (!safe) die(`unknown safe "${id}"`);
+
+  const variant = flags.hostile && flags.hostile !== true ? flags.hostile : null;
+  if (flags.hostile === true) die(`--hostile needs a variant: ${Object.keys(HOSTILE).join(', ')}`);
+  const hostile = variant ? HOSTILE[variant] : null;
+  if (variant && !hostile) die(`unknown --hostile "${variant}". Known: ${Object.keys(HOSTILE).join(', ')}`);
+  // A hostile stage on an off-roster Safe would be silently pointless: drain.mjs
+  // refuses on the roster gate first and the outcome under test is never reached.
+  if (hostile && !safe.roster) {
+    die(`${id} is roster:false. not-on-roster is checked FIRST, so it would shadow ${variant}. ` +
+        `Stage hostile queues on a rostered Safe.`);
+  }
+  if (hostile) {
+    const ok = hostile.needs(safe);
+    if (ok !== true) die(`${id} cannot carry "${variant}": ${ok}`);
+  }
 
   const client = createPublicClient({ transport: http(chain.rpc) });
   const usdc = getContract({ address: chain.usdc, abi: ERC20_ABI, client });
@@ -369,16 +431,25 @@ async function cmdStage(chain, cast, flags) {
   const amount = flags.amount && flags.amount !== true
     ? parseUnits(String(flags.amount), 6)
     : held;                                   // default: pay out everything it holds
-  if (amount === 0n) die(`${id} holds no USDC — nothing to stage. Run: fund --chain ${chain.id} --yes`);
+  // A hostile queue is refused before broadcast by construction, so it never needs
+  // a balance to be a valid test of the refusal. Requiring one would make these
+  // scenarios cost money for no reason.
+  if (amount === 0n && !hostile) die(`${id} holds no USDC — nothing to stage. Run: fund --chain ${chain.id} --yes`);
+  const payout = amount === 0n ? 1n : amount;
   if (amount > held) die(`${id} holds ${formatUnits(held, 6)} USDC but ${formatUnits(amount, 6)} was requested.`);
 
   const to = cast.PAYEE.address;
-  const data = encodeFunctionData({ abi: ERC20_ABI, functionName: 'transfer', args: [to, amount] });
+  const data = encodeFunctionData({ abi: ERC20_ABI, functionName: 'transfer', args: [to, payout] });
 
-  console.log(`\n  ${chain.name} (${chain.id}) — staging a payout on ${id}`);
+  console.log(`\n  ${chain.name} (${chain.id}) — staging a ${hostile ? `HOSTILE queue (${variant})` : 'payout'} on ${id}`);
   console.log(`    Safe       ${address}`);
-  console.log(`    payout     ${formatUnits(amount, 6)} USDC -> PAYEE ${to}`);
+  console.log(`    payout     ${formatUnits(payout, 6)} USDC -> PAYEE ${to}`);
   console.log(`    threshold  ${safe.threshold} of ${safe.owners.length}`);
+  if (hostile) {
+    console.log(`    shape      ${hostile.describe}`);
+    console.log(`    expect     drain.mjs refuses with "${variant}" and records a row`);
+    console.log(`    NOTE       this occupies the CURRENT nonce — ${id} stops being drainable until it moves`);
+  }
   if (!flags.yes) { console.log(`\n  Dry run. Re-run with --yes to propose and sign.\n`); return; }
 
   // The proposer must be an owner. Signing order is irrelevant to the service; the
@@ -387,7 +458,11 @@ async function cmdStage(chain, cast, flags) {
   const kit = await Safe.init({ provider: chain.rpc, signer: cast[proposer].pk, safeAddress: address });
 
   const safeTransaction = await kit.createTransaction({
-    transactions: [{ to: chain.usdc, value: '0', data }],
+    transactions: [{
+      to: chain.usdc, value: '0', data,
+      ...(hostile?.operation !== undefined ? { operation: hostile.operation } : {}),
+    }],
+    ...(hostile?.options ? { options: hostile.options } : {}),
   });
   const safeTxHash = await kit.getTransactionHash(safeTransaction);
   const proposerSig = await kit.signHash(safeTxHash);
@@ -405,7 +480,11 @@ async function cmdStage(chain, cast, flags) {
   // Confirm with just enough additional owners to reach threshold — no more. An
   // over-signed transaction would hide the below-threshold and drift branches we
   // need reachable elsewhere in the cast.
-  for (const role of rest.slice(0, safe.threshold - 1)) {
+  // below-threshold is produced by NOT signing: the proposer's lone signature is
+  // the whole shape, so the confirm loop is skipped rather than short-circuited
+  // somewhere deeper where it would look like a bug.
+  const wanted = hostile && hostile.signToThreshold === false ? 0 : safe.threshold - 1;
+  for (const role of rest.slice(0, wanted)) {
     const ownerKit = await Safe.init({ provider: chain.rpc, signer: cast[role].pk, safeAddress: address });
     const sig = await ownerKit.signHash(safeTxHash);
     await apiKit.confirmTransaction(safeTxHash, sig.data);
@@ -415,7 +494,12 @@ async function cmdStage(chain, cast, flags) {
   const pending = await apiKit.getPendingTransactions(address);
   const staged = pending.results.find((t) => t.safeTxHash === safeTxHash);
   console.log(`\n  queue depth ${pending.count} · confirmations ${staged?.confirmations?.length ?? 0}/${staged?.confirmationsRequired ?? safe.threshold}`);
-  console.log(`  THRESHOLD MET AND DELIBERATELY UNEXECUTED — this is the condition gavel drains.\n`);
+  if (hostile) {
+    console.log(`  HOSTILE QUEUE STAGED — expect drain.mjs to refuse with "${variant}".`);
+    console.log(`  Verify: node scripts/drain.mjs --chain ${chain.id} --address ${address}\n`);
+  } else {
+    console.log(`  THRESHOLD MET AND DELIBERATELY UNEXECUTED — this is the condition gavel drains.\n`);
+  }
 }
 
 /**
