@@ -1,6 +1,6 @@
 {
   "name": "gavel",
-  "version": "1.0.14",
+  "version": "1.0.15",
   "private": true,
   "description": "Executes threshold-met Safe transactions from a wallet that owns nothing.",
   "type": "module",
