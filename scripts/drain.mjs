@@ -37,6 +37,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createPublicClient, http } from 'viem';
 import { assemble } from '../src/assemble.mjs';
+import { record } from './outcome-log.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const MANIFEST = JSON.parse(readFileSync(join(ROOT, 'src', 'manifest.json'), 'utf8'));
@@ -77,6 +78,17 @@ const khKey = readFileSync(join(homedir(), '.config', 'keeperhub', 'env'), 'utf8
 if (!khKey) { console.error('KH_API_KEY missing from ~/.config/keeperhub/env'); process.exit(1); }
 const safeKey = readFileSync(join(homedir(), '.config', 'gavel', 'safe-api-key'), 'utf8').trim();
 
+// Every terminal state below goes through this, so a refusal is exactly as
+// durable as an execution. See scripts/outcome-log.mjs for why that matters.
+let logged = null;
+const note = (outcome, stage, extra = {}) => {
+  logged = record({
+    at: new Date().toISOString(), chainId, safe: safeAddress, outcome, stage,
+    receiptsEligible: chain.receiptsEligible, ...extra,
+  });
+  return logged;
+};
+
 const client = createPublicClient({ transport: http(chain.rpc) });
 const read = (fn) => client.readContract({ address: safeAddress, abi: SAFE_ABI, functionName: fn });
 
@@ -94,13 +106,18 @@ const code = await client.getCode({ address: safeAddress });
 if (!code || code === '0x') {
   console.error(`  NOT DEPLOYED  no code at ${safeAddress} on ${chain.name} (${chainId})`);
   console.error(`                deploy the cast first: node scripts/seed.mjs deploy --chain ${chainId}`);
+  note('safe-not-deployed', 'precondition', { detail: `no code at ${safeAddress}` });
   process.exit(1);
 }
 
 // ---- read: off-chain queue + on-chain state -------------------------------
 const res = await fetch(`${chain.txService}/safes/${safeAddress}/multisig-transactions/?executed=false&ordering=nonce&limit=20`,
   { headers: { Authorization: `Bearer ${safeKey}` } });
-if (!res.ok) { console.error(`  tx-service HTTP ${res.status} (addresses must be EIP-55 checksummed)`); process.exit(1); }
+if (!res.ok) {
+  console.error(`  tx-service HTTP ${res.status} (addresses must be EIP-55 checksummed)`);
+  note('tx-service-error', 'precondition', { detail: `HTTP ${res.status}` });
+  process.exit(1);
+}
 const queue = await res.json();
 const [nonce, threshold, owners] = await Promise.all([read('nonce'), read('getThreshold'), read('getOwners')]);
 
@@ -115,7 +132,12 @@ console.log(`\n  [1/3] assemble  ${r.executable ? 'EXECUTABLE' : `REFUSED — ${
 console.log(`        ${r.detail}`);
 // A named refusal is correct behaviour, not an error -- but a wrapper must be
 // able to tell "refused" from "executed". Exit 3 is the refusal channel.
-if (!r.executable) process.exit(3);
+if (!r.executable) {
+  note(r.reason, 'assemble', {
+    detail: r.detail, queueCount: queue.count, nonce, threshold,
+  });
+  process.exit(3);
+}
 
 // ---- gate 2: local simulation ---------------------------------------------
 const executor = flags.executor && flags.executor !== true
@@ -138,6 +160,10 @@ try {
     console.log(`  [2/3] eth_call  INNER CALL REVERTS -- would consume the nonce and move nothing`);
     console.log(`        refusing to broadcast. This is the inner-call-failed / GS013 shape;`);
     console.log(`        to produce it deliberately, use BENCH_GS013 rather than a live payout.`);
+    note('inner-call-failed', 'eth_call', {
+      detail: 'execTransaction would return success=false: inner call reverts, nonce consumed, nothing moved',
+      queueCount: queue.count, nonce, threshold,
+    });
     process.exit(1);
   }
   console.log(`  [2/3] eth_call  SUCCEEDS`);
@@ -145,6 +171,12 @@ try {
   const msg = String(e.shortMessage || e.message || e).split('\n')[0];
   console.log(`  [2/3] eth_call  REVERTS — ${msg.slice(0, 120)}`);
   console.log(`        refusing to broadcast a transaction that cannot land.`);
+  // GS026 is Safe's "invalid owner provided" / already-consumed-nonce revert. When
+  // it surfaces here it is the race, not a malformed blob, and it is outcome 8 --
+  // not a generic precondition failure.
+  note(/GS026/.test(msg) ? 'raced-gs026' : 'eth-call-reverted', 'eth_call', {
+    detail: msg.slice(0, 200), queueCount: queue.count, nonce, threshold,
+  });
   process.exit(1);
 }
 
@@ -175,12 +207,17 @@ const pre = await call({ ...body, simulate: true });
 const preBad = pre.json?.success === false || pre.json?.error || pre.json?.revertReason;
 console.log(`  [3/3] KeeperHub simulate  HTTP ${pre.status} ${pre.ok && !preBad ? 'OK' : 'FAILED'}`);
 if (!pre.ok || preBad) {
-  console.log(`        ${JSON.stringify(pre.json).slice(0, 300)}`);
+  const body300 = JSON.stringify(pre.json).slice(0, 300);
+  console.log(`        ${body300}`);
+  note(/GS026/.test(body300) ? 'raced-gs026' : 'preflight-failed', 'keeperhub-simulate', {
+    detail: body300, queueCount: queue.count, nonce, threshold,
+  });
   process.exit(1);
 }
 
 if (!flags.execute) {
   console.log(`\n  All three gates passed. Dry run — re-run with --execute to broadcast.\n`);
+  note('executable-dry', 'gates', { queueCount: queue.count, nonce, threshold });
   process.exit(0);
 }
 
@@ -191,4 +228,9 @@ console.log(`    executionId  ${j.executionId ?? '(none)'}`);
 console.log(`    status       ${j.status ?? out.status}`);
 if (j.transactionHash) console.log(`    tx           ${chain.explorer}/tx/${j.transactionHash}`);
 else console.log(`    no transactionHash — the call never broadcast: ${JSON.stringify(j).slice(0, 240)}`);
+note(j.transactionHash ? 'executed' : 'broadcast-no-hash', 'broadcast', {
+  detail: j.transactionHash ? null : JSON.stringify(j).slice(0, 240),
+  executionId: j.executionId ?? null, tx: j.transactionHash ?? null,
+  queueCount: queue.count, nonce, threshold,
+});
 console.log();
