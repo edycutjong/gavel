@@ -111,7 +111,7 @@ the middle box — a pure function that turns a queue plus three on-chain reads 
 
 ---
 
-## 🚦 The nine named outcomes
+## 🚦 The nine named outcomes, and the three guards
 
 Every non-execution has a machine-readable reason. Seven are decided **pre-broadcast** by the pure
 function; two are read **post-broadcast** from KeeperHub's own execution row.
@@ -128,13 +128,59 @@ function; two are read **post-broadcast** from KeeperHub's own execution row.
 | 8 | `raced-gs026` | post-broadcast | Someone else consumed the nonce first. An expected outcome, not a crash |
 | 9 | `inner-call-failed` | post-broadcast | `execTransaction` succeeded; the inner call reverted (`GS013`) |
 
-Plus **two security guards that are deliberately not among the nine**, because a guard whose correct
+Plus **three guards that are deliberately not among the nine**, because a guard whose correct
 behaviour is "never fires" must still not fall through to execution:
 
 | Guard | Why it exists |
 |---|---|
 | `not-on-roster` | I3, re-checked inside the pure function and not only at the workflow's roster node, because a public Marketplace listing is a caller-open door |
 | `incomplete-payload` | The Safe plugin's projection omits five of `execTransaction`'s ten arguments. When they have not been hydrated we **cannot** evaluate the refund guard — so we refuse rather than assume zero |
+| `malformed-payload` | Input that is not well-formed at all — a `safeAddress` that is not 20 bytes, a non-integer nonce, an empty owner array. Returned from nine call sites in [`src/assemble.mjs`](src/assemble.mjs). It guards a *caller*, not a queued transaction, which is why it sits here and not among the nine |
+
+### Which of them have actually *happened*
+
+A refusal branch covered by a unit test is a claim about a pure function. A refusal branch with a
+row in `docs/outcomes-<chain>.jsonl` is a claim about this software, running against a real Safe on
+a real chain. Those are different evidence and this table does not let them look the same.
+
+Every terminal state of a drain — refused, guarded, failed precondition, dry, executed — is written
+by [`scripts/outcome-log.mjs`](scripts/outcome-log.mjs). The table is generated, never hand-kept:
+`node scripts/outcomes.mjs --markdown`.
+
+| # | outcome | decided by | named in `test/` | observed live | rows |
+|---|---|---|---|---|---|
+| 1 | `not-next-nonce` | assemble | ✅ | ✅ | 5 |
+| 2 | `below-threshold` | assemble | ✅ | ✅ | 2 |
+| 3 | `eip1271-unsupported` | assemble | ✅ | ❌ | 0 |
+| 4 | `refund-requested` | assemble | ✅ | ✅ | 1 |
+| 5 | `delegatecall-refused` | assemble | ✅ | ✅ | 1 |
+| 6 | `threshold-drift` | assemble | ✅ | **n/a** | 0 |
+| 7 | `owner-removed` | assemble | ✅ | **n/a** | 0 |
+| 8 | `raced-gs026` | chain | ✅ | ✅ | 1 |
+| 9 | `inner-call-failed` | chain | ✅ | ✅ | 1 |
+| — | `not-on-roster` | assemble | ✅ | ✅ | 7 |
+| — | `incomplete-payload` | assemble | ✅ | **n/a** | 0 |
+| — | `malformed-payload` | assemble | ✅ | **n/a** | 0 |
+
+**7 of the 8 reachable outcomes have been observed.** Only `eip1271-unsupported` has not, and it
+needs a deployed contract signer added as an owner.
+
+**Four are marked `n/a`, and that is a finding rather than a gap.** They cannot be produced through
+the production data source at all:
+
+| outcome | why it cannot happen | measured |
+|---|---|---|
+| `threshold-drift` | the Safe Transaction Service reports `confirmationsRequired` as the **live** threshold, never a proposal-time snapshot, so "the queue still believes the old number is enough" is a state it will not serve | `BENCH_GOV`, threshold raised 2→3 after signing; the service reported 3 immediately |
+| `owner-removed` | the service **prunes** confirmations from addresses that are no longer owners — the stale signature never reaches a reader | `BENCH_ROTATE`, `O2` signed, `O2` removed; the service then returned the transaction with `O2` absent |
+| `incomplete-payload` | canvas-only: the Safe plugin projection omits five of the ten arguments. `drain.mjs` hydrates from the tx service and always has all ten | — |
+| `malformed-payload` | guards a caller that hands `assemble.mjs` garbage directly; chain and service inputs are well-formed by construction | — |
+
+This corrects something this README used to claim. Outcome 7 was described as *"a signature
+collected legitimately last week, from an owner removed yesterday — naive tooling broadcasts it."*
+Naive tooling reading this service would never see that signature. **The guards stay** — the
+decision surface is pure and source-agnostic, and a queue that does not normalise (the plugin
+projection, a self-hosted service, a replayed fixture) can still present both shapes. They are
+defence in depth, and saying so is more useful than four green ticks.
 
 ---
 
@@ -245,7 +291,7 @@ Also standing up:
   `fund -> stage -> drain` again. The same USDC therefore moves many times. Execution counts are
   counts of *executions*, not of distinct dollars, and the refusal invariant is what the volume is
   there to test.
-- **80 tests, ~0.08 s**, including [`test/live-fixture.test.mjs`](test/live-fixture.test.mjs), which
+- **87 tests, ~0.08 s**, including [`test/live-fixture.test.mjs`](test/live-fixture.test.mjs), which
   runs the untouched `assemble.mjs` over a **committed real Safe Transaction Service response**. Unit
   fixtures prove we are self-consistent; that file proves we match reality, and they are deliberately
   two different files.
@@ -339,7 +385,7 @@ It runs every gate CI runs, in the same order, and prints PASS/FAIL per gate:
 | Gate | What it proves |
 |---|---|
 | Decision surface is pure | `src/assemble.mjs` contains no `import`, `eval`, `fetch`, `Date.now`, `Math.random` or `process.env` — invariant I10 |
-| JS test suite | 80 tests, `node --test` |
+| JS test suite | 87 tests, `node --test` |
 | Published figures re-derive | all 24 README figures, re-derived from 1.3 MB of committed raw responses |
 | Solidity tests | `forge test` — skipped **loudly** if foundry is absent, never passed quietly |
 
@@ -348,7 +394,7 @@ An optional gate that cannot run reports `SKIP`, not `PASS`. A gate you can't ru
 If you would rather run the pieces yourself:
 
 ```bash
-npm test                       # 80 tests, ~0.08 s, no network, no keys
+npm test                       # 87 tests, ~0.08 s, no network, no keys
 ```
 
 That suite includes `test/live-fixture.test.mjs`, which runs `src/assemble.mjs` over a committed real
@@ -405,18 +451,21 @@ refusing correctly is a success, not an error.
 | [`src/assemble.mjs`](src/assemble.mjs) | The entire decision surface. Pure, zero deps, zero I/O. Injected verbatim into the workflow's Code node by `sync.mjs`, so canvas and repo cannot drift |
 | [`src/manifest.json`](src/manifest.json) | The 12-Safe cast + per-chain constants. `receiptsEligible` is load-bearing |
 | [`src/roster.json`](src/roster.json) | The opt-in list. Derived from the manifest by `seed.mjs roster`, never hand-kept |
-| [`scripts/seed.mjs`](scripts/seed.mjs) | `status` · `predict` · `deploy` · `fund` · `stage` · `roster`. Stages the conditions; **never executes** |
+| [`scripts/seed.mjs`](scripts/seed.mjs) | `status` · `predict` · `deploy` · `fund` · `stage` · `roster` · `govern`. Stages the conditions. `stage --hostile <variant>` builds a queue shaped to force ONE named refusal; `govern` is the only subcommand that spends gas on something other than a payout, because threshold-drift and owner-removed require the Safe's own configuration to change |
 | [`scripts/drain.mjs`](scripts/drain.mjs) | assemble → local `eth_call` → KeeperHub `simulate` → Direct Execution |
 | [`scripts/verify-assemble.mjs`](scripts/verify-assemble.mjs) | The pure function against a live queue; `--write-fixture` turns today's response into a regression test |
 | [`scripts/sync.mjs`](scripts/sync.mjs) | Emits the workflow JSON per chain (Safe plugin reads on 8453, `web3/read-contract` on testnets — see DX-6) |
 | [`scripts/audit.mjs`](scripts/audit.mjs) | Renders KeeperHub execution rows. Renders; never computes |
+| [`scripts/outcome-log.mjs`](scripts/outcome-log.mjs) | One durable row per terminal state of a drain. KeeperHub's ledger can only ever show successes — outcomes 1-7 are decided before anything is sent — so refusals needed a record of their own |
+| [`scripts/outcomes.mjs`](scripts/outcomes.mjs) | Generates the coverage table above from that log plus `test/`. `--markdown` for the pasteable form |
 | [`scripts/bench.py`](scripts/bench.py) | Reduces those rows to p50/p95 duration and gas cost. Python 3 stdlib, no network — a reducer, never a harness: with no receipts there is no output |
 | [`contracts/`](contracts/) | `MockUSDC.sol`, the testnet stand-in, and [`contracts/test/`](contracts/test/) — 22 tests at 100% coverage on every metric, dependency-free |
-| [`test/`](test/) | 80 tests: unit fixtures, the live-response regression file, manifest/roster invariants, and the coverage-gap suite ([`COVERAGE.md`](test/COVERAGE.md)) |
+| [`test/`](test/) | 87 tests: unit fixtures, the live-response regression file, manifest/roster invariants, and the coverage-gap suite ([`COVERAGE.md`](test/COVERAGE.md)) |
 | [`survey/`](survey/) | The 1,299-Safe measurement: collectors, 1.3 MB of raw responses, and `rederive.py`, which asserts all 24 published figures offline |
 | [`DX-REPORT.md`](DX-REPORT.md) | Seven reproducible KeeperHub findings, dated as they were hit |
 | [`workflows/`](workflows/) | Generated `gavel-drain` graph, 11 nodes (1 trigger + 10 actions), 10 edges |
 | [`docs/rehearsal-11155111.md`](docs/rehearsal-11155111.md) | Rehearsal log. Labelled NOT EVIDENCE |
+| [`docs/outcomes-11155111.jsonl`](docs/outcomes-11155111.jsonl) | Every decision gavel made on that chain, refusals included. Append-only JSON Lines |
 
 ---
 
