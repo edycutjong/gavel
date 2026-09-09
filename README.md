@@ -291,7 +291,11 @@ KeeperHub's own `simulate: true` preflight.
 Also standing up:
 
 - **12 Safes deployed and funded** on Ethereum Sepolia from one manifest, CREATE2-deterministic —
-  thresholds 1-of-2 through 3-of-5, five of them on the opt-in roster.
+  thresholds 1-of-2 through 3-of-5, **nine of them on the opt-in roster**. That was five until
+  2026-09-09: the four `BENCH_*` Safes each exist to demonstrate one named refusal, and none of
+  them could, because `not-on-roster` is the FIRST check in `assemble.mjs` and a `roster:false`
+  Safe refuses on the roster gate before reaching its own scenario. `HERO_B` stays off the roster
+  deliberately — it carries `assertNotOnRoster` and is the witness that the guard fires.
 - **The volume loop recycles, and you should know that when reading any execution count.** Every
   Safe swept is one we deployed, and the payouts they queue are ours — this is *mechanism* volume,
   never summed with third-party volume. Value used to flow O1 -> Safe -> PAYEE exactly once, and
@@ -460,7 +464,7 @@ refusing correctly is a success, not an error.
 | [`src/assemble.mjs`](src/assemble.mjs) | The entire decision surface. Pure, zero deps, zero I/O. Injected verbatim into the workflow's Code node by `sync.mjs`, so canvas and repo cannot drift |
 | [`src/manifest.json`](src/manifest.json) | The 12-Safe cast + per-chain constants. `receiptsEligible` is load-bearing |
 | [`src/roster.json`](src/roster.json) | The opt-in list. Derived from the manifest by `seed.mjs roster`, never hand-kept |
-| [`scripts/seed.mjs`](scripts/seed.mjs) | `status` · `predict` · `deploy` · `fund` · `stage` · `roster` · `govern`. Stages the conditions. `stage --hostile <variant>` builds a queue shaped to force ONE named refusal; `govern` is the only subcommand that spends gas on something other than a payout, because threshold-drift and owner-removed require the Safe's own configuration to change |
+| [`scripts/seed.mjs`](scripts/seed.mjs) | `status` · `predict` · `deploy` · `fund` · `stage` · `roster` · `govern`. Stages the conditions. `stage --hostile <variant>` builds a queue shaped to force ONE named refusal; `govern` is the only subcommand that spends gas on something other than a payout — `approve-hash` produces the unverified `v=1` word that outcome 3 refuses, and the two config actions are kept for the record even though the service normalises both outcomes away |
 | [`scripts/drain.mjs`](scripts/drain.mjs) | assemble → local `eth_call` → KeeperHub `simulate` → Direct Execution |
 | [`scripts/verify-assemble.mjs`](scripts/verify-assemble.mjs) | The pure function against a live queue; `--write-fixture` turns today's response into a regression test |
 | [`scripts/sync.mjs`](scripts/sync.mjs) | Emits the workflow JSON per chain (Safe plugin reads on 8453, `web3/read-contract` on testnets — see DX-6) |
