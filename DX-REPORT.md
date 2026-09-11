@@ -322,7 +322,7 @@ remembers.
 
 **Severity:** medium — a documented Condition operator cannot be used at all; the error message
 points somewhere else.
-**Date:** 2026-09-11 · execution `4y5c1zst9hoegqkybyhvj`
+**Date:** 2026-09-11 · execution `4y5c1zst9hoegqkybyhvj` · **filed as [#2407](https://github.com/KeeperHub/keeperhub/issues/2407)**
 
 `docs/workflows/creating.md` lists `matchesRegex` among the Condition operators. Our address gate
 used it: `{{@trigger-1:Webhook.safeAddress}} matchesRegex ^0x[0-9a-fA-F]{40}$`. The first canvas
@@ -353,7 +353,7 @@ and unusable costs more than one that is absent.
 
 **Severity:** medium — combined with #2227's freeze-at-listing, it is a trap with a misleading
 warning in front of it.
-**Date:** 2026-09-11 · workflow `7v0qwhcp5gcex58gjugyg`
+**Date:** 2026-09-11 · workflow `7v0qwhcp5gcex58gjugyg` · **already tracked as [#2014](https://github.com/KeeperHub/keeperhub/issues/2014); dated production repro added as a [comment](https://github.com/KeeperHub/keeperhub/issues/2014#issuecomment-5635854571)**
 
 `POST /api/workflows/create` with a graph containing a `web3/write-contract` node returned a row
 with `workflowType: "read"`. `validate_workflow` then warned `write-action-on-read-workflow` —
@@ -375,7 +375,7 @@ they did not make.
 
 **Severity:** high for observability — the one outcome an executor most needs to see is the one
 that reports as success.
-**Date:** 2026-09-11 · executions `819zav3gl3fkd89n7cb42` (won) and `j9g0a58oxem50jct5qpt7` (lost)
+**Date:** 2026-09-11 · executions `819zav3gl3fkd89n7cb42` (won) and `j9g0a58oxem50jct5qpt7` (lost) · **filed as [#2408](https://github.com/KeeperHub/keeperhub/issues/2408)**
 
 Two concurrent triggers of the same workflow against the same Safe nonce. One broadcast and moved
 the money; the other's `execTransaction` reverted with `Error(GS026)`. The loser's `exec-1` node
