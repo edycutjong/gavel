@@ -14,6 +14,7 @@
 
   [![Live](https://img.shields.io/badge/🚀_Live-Site-06b6d4?style=for-the-badge)](https://gavel.edycu.dev/)
   [![Pitch Deck](https://img.shields.io/badge/📊_Pitch-Deck-f59e0b?style=for-the-badge)](https://gavel.edycu.dev/deck.html)
+  [![BUIDL](https://img.shields.io/badge/🏗️_BUIDL-48314-e11d48?style=for-the-badge)](https://dorahacks.io/buidl/48314)
   [![Built for The Agent Economy](https://img.shields.io/badge/DoraHacks-Agent_Economy-8b5cf6?style=for-the-badge)](https://dorahacks.io/hackathon/agent-economy)
 
   <br/>
