@@ -366,12 +366,13 @@
     Ethereum Sepolia. <code>EVIDENCE.md</code> is absent by design, not empty by accident —
     <code>scripts/audit.mjs</code> refuses to write a row from a chain marked
     <code>receiptsEligible: false</code>.</p>
-    <p style="margin:0"><b style="color:var(--hi)">The workflow is not deployed on the canvas.</b>
-    <code>code/run-code</code> and <code>HTTP Request</code> require a paid KeeperHub plan.
-    <code>scripts/drain.mjs</code> reaches the same on-chain outcome through the Direct Execution API,
-    which is not gated — but it decides here and asks KeeperHub to execute, rather than deciding
-    inside KeeperHub. That is a weaker answer and we are not going to blur it. The same gate is why
-    there is no Hub entry and no Marketplace listing: both require a created workflow.</p>
+    <p style="margin:0"><b style="color:var(--hi)">The canvas workflow is one day old.</b>
+    <code>code/run-code</code> and <code>HTTP Request</code> are pro-gated and nothing discloses it
+    before create time (issue #2279, maintainer-confirmed). A trial unlocked them on 2026-09-11; the
+    same day the graph ran 7 times inside KeeperHub — 2 executions, 2 named refusals, 1 deliberate
+    GS026 race loss — and went live on the Marketplace as <code>gavel-drain</code> at $0.05 with
+    zero external paid calls. <code>drain.mjs</code> holds the 150-run track record on the Direct
+    Execution API. Same <code>assemble.mjs</code> in both; we say which path produced which number.</p>
   </div>
 
   <h2>What is done</h2>

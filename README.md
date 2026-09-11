@@ -195,33 +195,38 @@ KeeperHub is not a deployment target bolted on at the end — it is the runtime.
 no scheduler and no wallet of its own; every read, every gate and the broadcast itself happen inside
 KeeperHub. Four API surfaces and the Safe plugin carry the whole flow:
 
-Every surface below carries a **liveness claim**. "Live" means it ran in the path that produced
-the 150 executions on record. "Authored" means it is committed and was verified during the spikes,
-but the production path does not go through it — and saying so is more useful to you than a longer
-list of yeses.
+Every surface below carries a **liveness claim** with a date. "Live" means it ran against a real
+Safe on a real chain and the executionId is on record. The canvas rows are dated 2026-09-11,
+because that is the day the Pro trial made them reachable — earlier than that this table said
+"authored, not in the production path" for all of them, and it was right to.
 
 | Surface | Liveness | Where | What it does |
 |---|---|---|---|
 | **`POST /api/execute/contract-call`** | ✅ **live — all 150 executions** | [`scripts/drain.mjs:210`](scripts/drain.mjs) | Direct Execution. Always `simulate: true` as a preflight, then the real call. **There is no idempotency key** — this README claimed one until 2026-09-09 and the API exposes none. Two identical calls both broadcast, which is exactly what the deliberate race did; one came back `Error(GS026)`. Only the Safe nonce prevents a double-spend |
 | **`GET /api/analytics/runs`** | ✅ **live — 150 rows** | [`scripts/audit.mjs:54`](scripts/audit.mjs) | KeeperHub's own execution rows are the audit ledger: `id`, `source`, `status`, `transactionHashes`, `startedAt`, `completedAt`, `durationMs`, `gasUsedWei`, `error`. Those we render and never compute. `verified` / `receiptStatus` / `blockNumber` / `gasUsed` are **ours**, added only under `--verify` from `getTransactionReceipt` against the RPC — this README credited them to KeeperHub until 2026-09-09 |
 | **MCP server** | ✅ live, design-time | spikes | `get_plugin`, `get_spending_limits`, `list_projects`, `list_integrations`, `GET /api/mcp/schemas`. Every platform claim here was checked against a live MCP call |
-| **`POST /api/workflows/create`** | ⚠️ **called, rejected** | [`scripts/sync.mjs:300`](scripts/sync.mjs) | Emits the `gavel-drain` graph — 11 nodes, 10 edges, committed at [`workflows/`](workflows/). The API returns `upgrade_required`: `code/run-code` and `HTTP Request` are plan-gated (**issue #2279**) |
-| **Safe plugin reads** — `safe/get-pending-transactions`, `-threshold`, `-owners`, `-nonce` | ⚠️ **authored, not in the production path** | `workflows/*.json` nodes `queue-1`, `threshold-1`, `owners-1`, `nonce-1` | They are the canonical design and were verified in the spikes, but the graph holding them was never created. `drain.mjs` instead reads the queue from `api.safe.global` and takes `nonce()`/`getThreshold()`/`getOwners()` with viem straight off the RPC |
-| **`web3/read-contract`** · **`web3/write-contract`** | ⚠️ **authored, not in the production path** | `workflows/*.json` node `exec-1` — the `read-*` ids named here until 2026-09-09 do not exist | Same gate. `exec-1` is why the graph exists — all **7** Safe plugin actions are reads, so there is no Safe-plugin write action to execute with |
+| **`POST /api/workflows/create`** · **`PATCH /api/workflows/{id}`** | ✅ **live — 2026-09-11** | [`scripts/sync.mjs`](scripts/sync.mjs) `--push` | Emits and creates the `gavel-drain` graph — 11 nodes, 10 edges, committed at [`workflows/`](workflows/). Rejected with `upgrade_required` on the free plan until 09-11 (**issue #2279**, still a real DX gap); created as `7v0qwhcp5gcex58gjugyg` the day the trial unlocked it. `create` stores `workflowType: read` regardless of nodes and only `PATCH` derives it — so the first save is what makes a write workflow `write` |
+| **Canvas execution** — `POST /api/workflows/{id}/execute` | ✅ **live — 7 runs, 2026-09-11** | [`docs/outcomes-11155111.jsonl`](docs/outcomes-11155111.jsonl) rows with `stage: canvas` | The graph decided inside KeeperHub 7 times: **2 executions** (`hq4av5dbacb1i5z9bxfs0` → [`0x188addfb…`](https://sepolia.etherscan.io/tx/0x188addfb861b79c7d300966680fe3edc02140e58515425bfef358b4329b95a5c), `819zav3gl3fkd89n7cb42` → [`0x1377a121…`](https://sepolia.etherscan.io/tx/0x1377a12125f9bc1b463bbd276fa2baa8edeeadc31a8f9580ff22187b933ce9f0)), **2 named refusals** (`not-next-nonce`, `refund-requested`), **1 deliberate GS026 race loss** (`j9g0a58oxem50jct5qpt7`), 2 generator-bug runs kept in the fix log. Same `assemble.mjs`, same decisions `drain.mjs` makes |
+| **Marketplace listing** — `POST /api/mcp/workflows/gavel-drain/call` | ✅ **live — listed 2026-09-11 12:36 UTC** | [`workflows/gavel-drain-11155111-listed.json`](workflows/gavel-drain-11155111-listed.json) | Slug `gavel-drain`, $0.05 USDC/call, x402 v2 on Base. The row is `write`, so a paid call returns `execTransaction` calldata the caller signs from **their own** wallet — a judge can drain a roster Safe themselves. **Zero external paid calls so far**; say so before anyone asks |
+| **Safe plugin** — `safe/get-pending-transactions` | ✅ **live on the canvas — 2026-09-11** | `workflows/*.json` node `queue-1` | The queue read runs through the Safe plugin on every canvas run. `-threshold`, `-owners`, `-nonce` are in the Base graph only: the plugin's on-chain reads reject Sepolia (**DX-6**), so the Sepolia graph takes them with `web3/read-contract` against the Safe's own view functions. `drain.mjs` still reads `api.safe.global` and the RPC directly |
+| **`web3/read-contract`** ×3 · **`web3/write-contract`** | ✅ **live on the canvas — 2026-09-11** | `workflows/*.json` nodes `threshold-1`, `owners-1`, `nonce-1`, `exec-1` | `exec-1` is why the graph exists — all **7** Safe plugin actions are reads, so there is no Safe-plugin write action to execute with. It sent both canvas executions and swallowed the race loss: with `failOnError: false` a reverted write comes back `{"error":"Contract call failed: Error(GS026)","success":true}` and the execution finalises as `success` with no hash |
 
-**So be precise about what "through KeeperHub" means here.** Value moved through KeeperHub 150 times
-and the ledger proving it is KeeperHub's own — that part is real. The *reads* feeding the decision
-do not currently go through KeeperHub in the running path, because the workflow that would carry
-them is plan-gated. The canvas version and `drain.mjs` reach the identical on-chain outcome; they
-differ in where the reads come from and where the decision is made. We are not going to blur that.
+**So be precise about what "through KeeperHub" means here.** Value moved through KeeperHub 150
+times via the Direct Execution API (09-06/07) and the ledger proving it is KeeperHub's own — that
+part was always real. As of 2026-09-11 the *decision* also runs inside KeeperHub: the canvas
+workflow read the queue through the Safe plugin, read the chain, ran `assemble.mjs` in a Code
+node and sent `execTransaction` from a write node — 2 executions, 2 refusals, 1 race loss. The
+canvas track record is one day old and `drain.mjs` has the longer one. Both import the same
+`assemble.mjs`, so the decision is identical either way; we are not going to blur which path
+produced which number.
 
 The graph is generated, never hand-drawn: `sync.mjs` injects [`src/assemble.mjs`](src/assemble.mjs)
 **verbatim** into the Code node, so the function the tests run offline and the function the canvas
 runs on-chain cannot drift apart. That is the whole reason the decision surface is pure.
 
-Eight reproducible findings came out of building against it, dated as they were hit and filed
-upstream — see [`DX-REPORT.md`](DX-REPORT.md). The latest is the sharpest: **`analytics/runs` ages
-history out with no signal**, so the endpoint this project treats as the audit trail returned 150
+Eleven reproducible findings came out of building against it, dated as they were hit and filed
+upstream — see [`DX-REPORT.md`](DX-REPORT.md); three of them (DX-9/10/11) came out of the first
+day on the canvas. The sharpest is still DX-8: **`analytics/runs` ages history out with no signal**, so the endpoint this project treats as the audit trail returned 150
 runs on 09-07 and 2 on 09-09. `audit.mjs` now refuses to shrink `docs/receipts-*.json` without
 `--prune`, because a regenerate-in-place would have destroyed a ledger the API can no longer
 reproduce. The transaction hashes on disk remain verifiable on the explorer regardless.
@@ -244,7 +249,7 @@ refund-free, including the ones that are not.
 
 gavel refuses with `incomplete-payload` instead, and reads the raw Transaction Service alongside the
 plugin to hydrate the five fields. Filed upstream as **DX-1** in
-[`DX-REPORT.md`](DX-REPORT.md) — the strongest of eight findings, with a fix that is a passthrough
+[`DX-REPORT.md`](DX-REPORT.md) — the strongest of eleven findings, with a fix that is a passthrough
 rather than a redesign.
 
 ### And a normalisation we deliberately did *not* write
@@ -319,17 +324,23 @@ Also standing up:
   `scripts/audit.mjs` refuses to write a row from a chain marked `receiptsEligible: false`, and the
   only executions so far are on the rehearsal chain. The rehearsal log lives separately at
   [`docs/rehearsal-11155111.md`](docs/rehearsal-11155111.md) and is labelled **NOT EVIDENCE** at the top.
-- **The `gavel-drain` workflow cannot be created on our plan.** `POST /api/workflows/create` rejects
-  the finished 11-node graph with `upgrade_required`: both `code/run-code` (which holds the entire
-  decision surface) and `HTTP Request` (needed only *because* of the DX-1 gap above) require **pro**,
-  and nothing — schemas, `get_plugin`, or 106 crawled doc pages — discloses that before create time.
-  That is **DX-7**. [`scripts/drain.mjs`](scripts/drain.mjs) reaches the same on-chain outcome through
-  the **Direct Execution API**, which is not plan-gated, importing the same `assemble.mjs` the tests
-  run. **Same decision, same execution, different orchestration:** the workflow would decide inside
-  KeeperHub; `drain.mjs` decides here and asks KeeperHub to execute. That is a weaker answer to
-  "execution *through* KeeperHub" and we are not going to blur it. The generated workflow JSON is
-  committed at [`workflows/`](workflows/) so the graph is inspectable either way.
-- Not published to the KeeperHub Hub, not listed on the Marketplace, no demo video yet.
+- **The canvas workflow only became possible late.** `POST /api/workflows/create` rejects the
+  graph on the free plan with `upgrade_required`: both `code/run-code` (which holds the entire
+  decision surface) and `HTTP Request` (needed only *because* of the DX-1 gap above) require
+  **pro**, and nothing — schemas, `get_plugin`, or 106 crawled doc pages — discloses that before
+  create time. That is **DX-7**, filed as issue #2279 and maintainer-confirmed 09-04; it still
+  stands as a developer-experience problem even though a 14-day trial activated 2026-09-11 no
+  longer blocks us. The workflow has therefore run on the canvas only since **2026-09-11**, across
+  **7** executions, whereas [`scripts/drain.mjs`](scripts/drain.mjs) has the 150-run track record on
+  the Direct Execution API. Both import the same `assemble.mjs`, so the decision is identical.
+- **Two more generator bugs were only findable by running.** The first canvas run died at the
+  address gate because `matchesRegex` — listed in the docs — cannot pass the Condition validator
+  in any form; the second died in the Code node because templates are substituted as JSON values
+  and `sync.mjs` had quoted two of them. Both fixed in `sync.mjs` and both filed in
+  [`DX-REPORT.md`](DX-REPORT.md).
+- **The Marketplace listing has zero external paid calls.** It went live 2026-09-11 12:36 UTC at
+  $0.05; nobody outside this team has paid to call it. Not published to the KeeperHub Hub; no demo
+  of the listing in the video.
 
 ---
 
@@ -478,7 +489,7 @@ refusing correctly is a success, not an error.
 | [`contracts/`](contracts/) | `MockUSDC.sol`, the testnet stand-in, and [`contracts/test/`](contracts/test/) — 22 tests at 100% coverage on every metric, dependency-free |
 | [`test/`](test/) | 87 tests: unit fixtures, the live-response regression file, manifest/roster invariants, and the coverage-gap suite ([`COVERAGE.md`](test/COVERAGE.md)) |
 | [`survey/`](survey/) | The 1,299-Safe measurement: collectors, 1.25 MB of raw responses, and `rederive.py`, which asserts all 24 published figures offline |
-| [`DX-REPORT.md`](DX-REPORT.md) | Eight reproducible KeeperHub findings, dated as they were hit |
+| [`DX-REPORT.md`](DX-REPORT.md) | Eleven reproducible KeeperHub findings, dated as they were hit |
 | [`workflows/`](workflows/) | Generated `gavel-drain` graph, 11 nodes (1 trigger + 10 actions), 10 edges |
 | [`docs/rehearsal-11155111.md`](docs/rehearsal-11155111.md) | Rehearsal log. Labelled NOT EVIDENCE |
 | [`docs/outcomes-11155111.jsonl`](docs/outcomes-11155111.jsonl) | Every decision gavel made on that chain, refusals included. Append-only JSON Lines |
@@ -507,6 +518,7 @@ retraction.
 
 | Date | We said | It was actually | Fixed in |
 |---|---|---|---|
+| **2026-09-11** | This README, the landing page, the deck and the frozen BUIDL answers all said *the workflow does not exist on the canvas* | **True until 2026-09-11 08:06 UTC, false after.** A Pro trial unlocked `workflows/create`; the graph ran 7 times on the canvas the same day and was listed on the Marketplace. The frozen DoraHacks Q2 answer still carries the old claim and cannot be edited — read it as dated 09-09 | [`f91d1d8`](../../commit/f91d1d8), [`fa64575`](../../commit/fa64575), this commit |
 | **2026-09-09** | Outcome 7 described *"a signature collected legitimately last week, from an owner removed yesterday — naive tooling broadcasts it"* | **Naive tooling would never see that signature.** The Safe Transaction Service prunes confirmations from addresses that are no longer owners, and reports `confirmationsRequired` as the live threshold — so `owner-removed` and `threshold-drift` cannot be produced through it at all. Measured on `BENCH_ROTATE` and `BENCH_GOV`, not inferred. Both guards stay as defence in depth; the coverage table now says `n/a` | [`c0fef30`](../../commit/c0fef30) |
 | **2026-09-09** | `audit.mjs` said *"Do not hand-edit — regenerate"* | **Regenerating destroyed the ledger.** KeeperHub's `analytics/runs` aged 150 runs down to 2 between 09-07 and 09-09 with no retention signal, so a regenerate-in-place replaced a 150-row audit trail with a 1-row one and **exited 0**. It came back only because the file was committed. A shrinking rewrite is now a refusal. Filed as DX-8 | [`8d55bcb`](../../commit/8d55bcb) |
 | **2026-09-09** | The landing page repeated two of the three invented claims above | `site/index.html` carried the same non-existent `Idempotency-Key`, and credited KeeperHub with `verified` / `receiptStatus` / `blockNumber` / `gasUsed` in the same words the README did. Fixing the README did not fix the page a judge actually opens first, and the second sweep is the only reason it was caught | [`site/index.html`](site/index.html) |
