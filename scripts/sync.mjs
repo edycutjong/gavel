@@ -125,12 +125,16 @@ return assemble({
   safeAddress: __safeAddress,
   roster: ROSTER,
   queue: { transactions: __transactions, count: __transactions.length },
+  // Unquoted on purpose: the Code node substitutes every template as a JSON
+  // value, so a string result arrives already quoted. Wrapping it again produced
+  // ""37"" and a syntax error on the first canvas run (2026-09-11, execution
+  // 6x4fj09qq46up7rcej3hk). toCount() accepts string or number either way.
   onchainNonce: ${chainId === '8453'
-    ? '"{{@nonce-1:Safe Nonce.nonce}}"'
-    : '"{{@nonce-1:Read Nonce.result}}"'},
+    ? '{{@nonce-1:Safe Nonce.nonce}}'
+    : '{{@nonce-1:Read Nonce.result}}'},
   onchainThreshold: ${chainId === '8453'
-    ? '"{{@threshold-1:Safe Threshold.threshold}}"'
-    : '"{{@threshold-1:Read Threshold.result}}"'},
+    ? '{{@threshold-1:Safe Threshold.threshold}}'
+    : '{{@threshold-1:Read Threshold.result}}'},
   onchainOwners: ${chainId === '8453'
     ? '{{@owners-1:Safe Owners.owners}}'
     : '{{@owners-1:Read Owners.result}}'},
@@ -188,9 +192,17 @@ const nodes = [
   // Marketplace listing) can send anything; nothing downstream should have to
   // assume otherwise. Rejecting non-addresses here means the injection vector in
   // the Code node is closed at the boundary as well as at the splice.
+  //
+  // Shape check only, not a regex. The docs list `matchesRegex`, but the runtime
+  // validator (lib/workflow/nodes/condition/validator.ts) bans `new RegExp`, has
+  // no `test` in ALLOWED_METHODS, and rejects any `[` preceded by a word char —
+  // so `0x[0-9a-fA-F]{40}` fails even quoted (first canvas run, 2026-09-11,
+  // execution 4y5c1zst9hoegqkybyhvj). `startsWith` and `.length` are allowed.
+  // The strict ADDRESS_RE check lives in assemble(), which refuses
+  // `malformed-payload` for anything that slips past this.
   node('gate-addr', 'Valid Address', 'action', {
     actionType: 'Condition',
-    condition: '{{@trigger-1:Webhook.safeAddress}} matchesRegex ^0x[0-9a-fA-F]{40}$',
+    condition: '{{@trigger-1:Webhook.safeAddress}}.startsWith("0x") && {{@trigger-1:Webhook.safeAddress}}.length === 42',
   }, 250, 0),
 
   node('queue-1', 'Safe Queue', 'action', {
