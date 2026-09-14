@@ -13,7 +13,7 @@ reproductions. Every entry is dated and reproducible; nothing here is a guess.
 
 | Ref | What | Filed | State |
 |---|---|---|---|
-| [PR #2277](https://github.com/KeeperHub/keeperhub/pull/2277) | regenerable trace-method availability probe + 29 tests (closes #2247) | 2026-09-03 | **merged 2026-09-10**, two `CHANGES_REQUESTED` rounds from @suisuss answered, approved by @joelorzet; shipped in [v3.5.0](https://github.com/KeeperHub/keeperhub/releases/tag/v3.5.0) 2026-09-12 |
+| [PR #2277](https://github.com/KeeperHub/keeperhub/pull/2277) | regenerable trace-method availability probe + 38 tests (closes #2247) | 2026-09-03 | **merged 2026-09-10**, two `CHANGES_REQUESTED` rounds from @suisuss answered, approved by @joelorzet; shipped in [v3.5.0](https://github.com/KeeperHub/keeperhub/releases/tag/v3.5.0) 2026-09-12 |
 | [#2278](https://github.com/KeeperHub/keeperhub/issues/2278) | DX-1 — Safe plugin omits 5 `execTransaction` args | 2026-09-03 | closed — fixed upstream by another contributor in #2351 |
 | [#2279](https://github.com/KeeperHub/keeperhub/issues/2279) | DX-7 — plan gating invisible until create | 2026-09-03 | closed — maintainer-confirmed 2026-09-04 |
 | [#2240 comment](https://github.com/KeeperHub/keeperhub/issues/2240#issuecomment-5520177435) | dedup-identity design proposal for state triggers | 2026-09-03 | superseded by a competing PR; conceded |

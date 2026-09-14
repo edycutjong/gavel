@@ -233,7 +233,7 @@ runs on 09-07 and 2 on 09-09. `audit.mjs` now refuses to shrink `docs/receipts-*
 reproduce. The transaction hashes on disk remain verifiable on the explorer regardless.
 
 **One of those filings is now KeeperHub code.** [PR #2277](https://github.com/KeeperHub/keeperhub/pull/2277)
-— a regenerable trace-method availability probe with 29 tests, closing issue #2247 — was merged
+— a regenerable trace-method availability probe with 38 tests, closing issue #2247 — was merged
 2026-09-10 and shipped in [KeeperHub v3.5.0](https://github.com/KeeperHub/keeperhub/releases/tag/v3.5.0)
 on 2026-09-12, credited in the release notes. Issues #2278 and #2279 are closed (DX-1 was fixed
 upstream by another contributor in #2351); #2407 and #2408 are open. The filing ledger with dates and
