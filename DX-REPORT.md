@@ -9,6 +9,18 @@ reproductions. Every entry is dated and reproducible; nothing here is a guess.
 > **filed none of them**; both UX bounties went to the field's #1 and #2 upstream
 > contributors. This file gets sent whether or not it feels finished.
 
+**Filing ledger (as of 2026-09-14):**
+
+| Ref | What | Filed | State |
+|---|---|---|---|
+| [PR #2277](https://github.com/KeeperHub/keeperhub/pull/2277) | regenerable trace-method availability probe + 29 tests (closes #2247) | 2026-09-03 | **merged 2026-09-10**, two `CHANGES_REQUESTED` rounds from @suisuss answered, approved by @joelorzet; shipped in [v3.5.0](https://github.com/KeeperHub/keeperhub/releases/tag/v3.5.0) 2026-09-12 |
+| [#2278](https://github.com/KeeperHub/keeperhub/issues/2278) | DX-1 — Safe plugin omits 5 `execTransaction` args | 2026-09-03 | closed — fixed upstream by another contributor in #2351 |
+| [#2279](https://github.com/KeeperHub/keeperhub/issues/2279) | DX-7 — plan gating invisible until create | 2026-09-03 | closed — maintainer-confirmed 2026-09-04 |
+| [#2240 comment](https://github.com/KeeperHub/keeperhub/issues/2240#issuecomment-5520177435) | dedup-identity design proposal for state triggers | 2026-09-03 | superseded by a competing PR; conceded |
+| [#2407](https://github.com/KeeperHub/keeperhub/issues/2407) | DX-9 — `matchesRegex` unevaluable | 2026-09-11 | open |
+| [#2014 comment](https://github.com/KeeperHub/keeperhub/issues/2014#issuecomment-5635854571) | DX-10 — create-side `workflowType` derivation | 2026-09-11 | open |
+| [#2408](https://github.com/KeeperHub/keeperhub/issues/2408) | DX-11 — softened write leaves no execution-level trace | 2026-09-11 | open |
+
 **Environment:** KeeperHub MCP server (`app.keeperhub.com/mcp`), org schema snapshot
 `2026-09-02T06:34:21Z`, Base mainnet 8453, Node 22.22.0.
 
